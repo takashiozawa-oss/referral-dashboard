@@ -254,9 +254,9 @@
 
   <div class="filter-bar">
     <span class="filter-label">期間</span>
-    <input type="month" id="filterFrom" value="2025-01">
+    <input type="month" id="filterFrom">
     <span style="color:var(--ink-3)">〜</span>
-    <input type="month" id="filterTo" value="2025-12">
+    <input type="month" id="filterTo">
     <div class="filter-sep"></div>
     <span class="filter-label">拠点</span>
     <select id="filterLocation">
@@ -457,9 +457,9 @@
 <div class="tab-panel" id="tab-list">
   <div class="filter-bar">
     <span class="filter-label">期間</span>
-    <input type="month" id="listFrom" value="2025-01">
+    <input type="month" id="listFrom">
     <span style="color:var(--ink-3)">〜</span>
-    <input type="month" id="listTo" value="2025-12">
+    <input type="month" id="listTo">
     <div class="filter-sep"></div>
     <span class="filter-label">ステータス</span>
     <select id="listStatus">
@@ -497,9 +497,9 @@
 <div class="tab-panel" id="tab-ranking">
   <div class="filter-bar">
     <span class="filter-label">期間</span>
-    <input type="month" id="rankFrom" value="2025-01">
+    <input type="month" id="rankFrom">
     <span style="color:var(--ink-3)">〜</span>
-    <input type="month" id="rankTo" value="2025-12">
+    <input type="month" id="rankTo">
     <div class="filter-sep"></div>
     <span class="filter-label">種別</span>
     <select id="rankType">
@@ -690,9 +690,15 @@ function generateDemoData() {
 //  INIT
 // ============================================================
 window.addEventListener('DOMContentLoaded',()=>{
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const thisMonth = `${thisYear}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const yearStart = `${thisYear}-01`;
+  ['filterFrom','listFrom','rankFrom'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=yearStart; });
+  ['filterTo','listTo','rankTo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=thisMonth; });
   buildColumnTable();
   buildGasCode();
-  document.getElementById('inDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('inDate').value = now.toISOString().slice(0,10);
   document.getElementById('inStatus').addEventListener('change', e=>{
     document.getElementById('inReasonGroup').style.display = e.target.value==='不成立'?'':'none';
   });
