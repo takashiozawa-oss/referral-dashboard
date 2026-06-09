@@ -194,6 +194,20 @@
   .input-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }
   .input-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
 
+
+  /* ACCORDION */
+  .org-row { cursor: pointer; user-select: none; }
+  .org-row:hover td { background: #f0f4ff !important; }
+  .org-row td:first-child { position: relative; padding-left: 32px; }
+  .expand-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--ink-3); transition: transform .2s; }
+  .org-row.expanded .expand-icon { transform: translateY(-50%) rotate(90deg); }
+  .person-rows { display: none; }
+  .person-rows.open { display: table-row-group; }
+  .person-row td { background: #f8f9ff; padding: 8px 14px; font-size: 12px; border-bottom: 1px solid var(--border); }
+  .person-row td:first-child { padding-left: 48px; color: var(--ink-3); font-style: italic; }
+  .person-label { display: inline-flex; align-items: center; gap: 6px; }
+  .person-icon { width: 22px; height: 22px; border-radius: 50%; background: var(--accent-l); color: var(--accent); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+
   /* SPARK */
   .spark { display: inline-flex; align-items: flex-end; gap: 2px; height: 20px; }
   .spark-bar { width: 4px; border-radius: 2px; background: var(--accent); opacity: .45; }
@@ -516,13 +530,12 @@
       <div class="table-title">紹介元ランキング</div>
       <span style="font-size:12px;color:var(--ink-3)" id="rankingCount"></span>
     </div>
-    <table>
+    <table id="rankingTable">
       <thead><tr>
-        <th>順位</th><th>事業所名</th><th>種別</th><th>担当者（最新）</th>
+        <th>順位</th><th>事業所名 <span style="font-size:10px;color:var(--ink-3);font-weight:400;">▶ クリックで担当者展開</span></th><th>種別</th><th>担当者（最新）</th>
         <th class="num">依頼</th><th class="num">成立</th><th class="num">不成立</th><th class="num">調整中</th><th class="num">成立率</th>
         <th>トレンド</th><th>最終依頼日</th>
       </tr></thead>
-      <tbody id="rankingTableBody"></tbody>
     </table>
   </div>
 </div>
@@ -943,21 +956,42 @@ function buildRankingTable(){
   });
   const months=getMonthRange(from,to);
   const half=Math.floor(months.length/2);
-  const map={};
+
+  // 事業所別集計
+  const orgMap={};
   filtered.forEach(d=>{
-    if(!map[d.org]) map[d.org]={org:d.org,type:d.type,person:d.person,dates:[],ok:0,ng:0,pending:0};
-    map[d.org].dates.push(d.date);
-    map[d.org].person=d.person;
-    if(d.status==='成立')   map[d.org].ok++;
-    if(d.status==='不成立') map[d.org].ng++;
-    if(d.status==='調整中') map[d.org].pending++;
+    if(!orgMap[d.org]) orgMap[d.org]={org:d.org,type:d.type,person:d.person,dates:[],ok:0,ng:0,pending:0,persons:{}};
+    orgMap[d.org].dates.push(d.date);
+    orgMap[d.org].person=d.person; // 最新担当者
+    if(d.status==='成立')   orgMap[d.org].ok++;
+    if(d.status==='不成立') orgMap[d.org].ng++;
+    if(d.status==='調整中') orgMap[d.org].pending++;
+    // 担当者別集計
+    const pname=d.person||'（不明）';
+    if(!orgMap[d.org].persons[pname]) orgMap[d.org].persons[pname]={name:pname,ok:0,ng:0,pending:0,lastDate:''};
+    const p=orgMap[d.org].persons[pname];
+    if(d.status==='成立')   p.ok++;
+    if(d.status==='不成立') p.ng++;
+    if(d.status==='調整中') p.pending++;
+    if(!p.lastDate||d.date>p.lastDate) p.lastDate=d.date;
   });
-  const rows=Object.values(map).sort((a,b)=>(b.ok+b.ng+b.pending)-(a.ok+a.ng+a.pending));
+
+  const rows=Object.values(orgMap).sort((a,b)=>(b.ok+b.ng+b.pending)-(a.ok+a.ng+a.pending));
   document.getElementById('rankingCount').textContent=`${rows.length}件の事業所`;
-  const tb=document.getElementById('rankingTableBody');
-  if(!rows.length){ tb.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">データなし</div></div></td></tr>`; return; }
-  tb.innerHTML=rows.map((r,i)=>{
+  const table=document.getElementById('rankingTable');
+  // 既存のtbodyを全削除
+  while(table.tBodies.length) table.removeChild(table.tBodies[0]);
+  if(!rows.length){
+    const empty=document.createElement('tbody');
+    empty.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">データなし</div></div></td></tr>`;
+    table.appendChild(empty);
+    return;
+  }
+
+  let html='';
+  rows.forEach((r,i)=>{
     const rank=i+1;
+    const orgId=`org-${i}`;
     const bc=rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
     const total=r.ok+r.ng+r.pending;
     const decided=r.ok+r.ng;
@@ -969,9 +1003,12 @@ function buildRankingTable(){
     const dHtml=delta>0?`<span style="color:var(--green);font-weight:700;">↑+${delta}</span>`:delta<0?`<span style="color:var(--red);font-weight:700;">↓${delta}</span>`:`<span style="color:var(--ink-3);">→</span>`;
     const last=r.dates.sort().slice(-1)[0]||'—';
     const spark=buildSpark(r.dates,months);
-    return `<tr>
-      <td><span class="rank-badge ${bc}">${rank}</span></td>
-      <td><strong>${r.org}</strong></td>
+    const personCount=Object.keys(r.persons).length;
+
+    // 事業所行
+    html+=`<tr class="org-row" onclick="togglePersons('${orgId}', this)">
+      <td><span class="expand-icon">▶</span><span class="rank-badge ${bc}">${rank}</span></td>
+      <td><strong>${r.org}</strong> <span style="font-size:11px;color:var(--ink-3);">担当${personCount}名</span></td>
       <td><span class="type-badge ${typeClass(r.type)}">${r.type}</span></td>
       <td>${r.person||'—'}</td>
       <td class="num">${total}</td>
@@ -982,7 +1019,50 @@ function buildRankingTable(){
       <td>${spark}</td>
       <td style="font-size:12px;color:var(--ink-3);">${last}</td>
     </tr>`;
-  }).join('');
+
+    // 担当者行（tbody グループとして折りたたみ）
+    const persons=Object.values(r.persons).sort((a,b)=>(b.ok+b.ng+b.pending)-(a.ok+a.ng+a.pending));
+    html+=`<tbody class="person-rows" id="${orgId}">`;
+    persons.forEach((p,pi)=>{
+      const ptotal=p.ok+p.ng+p.pending;
+      const pdecided=p.ok+p.ng;
+      const prate=pdecided>0?Math.round(p.ok/pdecided*100)+'%':'—';
+      const prateColor=pdecided>0?(p.ok/pdecided>=.7?'var(--green)':p.ok/pdecided>=.5?'var(--amber)':'var(--red)'):'var(--ink-3)';
+      const initial=p.name.replace(/[　 ]/g,'').slice(0,1);
+      html+=`<tr class="person-row">
+        <td colspan="1" style="padding-left:48px;">└</td>
+        <td colspan="1">
+          <span class="person-label">
+            <span class="person-icon">${initial}</span>
+            ${p.name}
+          </span>
+        </td>
+        <td colspan="2" style="color:var(--ink-3);font-size:11px;">最終依頼：${p.lastDate||'—'}</td>
+        <td class="num">${ptotal}</td>
+        <td class="num" style="color:var(--green)">${p.ok}</td>
+        <td class="num" style="color:var(--red)">${p.ng}</td>
+        <td class="num" style="color:var(--amber)">${p.pending}</td>
+        <td class="num" style="color:${prateColor};font-weight:700;">${prate}</td>
+        <td colspan="2"></td>
+      </tr>`;
+    });
+    html+=`</tbody>`;
+  });
+  // htmlをtableに挿入
+  const tmp=document.createElement('tbody');
+  tmp.innerHTML=html;
+  // tr と tbody を分けてtableに追加
+  const frag=document.createDocumentFragment();
+  while(tmp.firstChild) frag.appendChild(tmp.firstChild);
+  table.appendChild(frag);
+}
+
+function togglePersons(orgId, rowEl){
+  const tbody=document.getElementById(orgId);
+  if(!tbody) return;
+  const isOpen=tbody.classList.contains('open');
+  tbody.classList.toggle('open', !isOpen);
+  rowEl.classList.toggle('expanded', !isOpen);
 }
 
 function buildSpark(dates,months){
