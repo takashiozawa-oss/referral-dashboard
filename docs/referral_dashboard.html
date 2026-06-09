@@ -53,7 +53,7 @@
   .tab-btn:hover:not(.active) { color: var(--ink-2); }
 
   /* MAIN */
-  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  main { padding: 24px; max-width: 1400px; margin: 0 auto; overflow-x: hidden; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -105,7 +105,14 @@
   .chart-sub { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
 
   /* TABLE */
-  .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+  .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; display: block; }
+  .table-scroll table { min-width: 680px; width: 100%; }
+  #rankingTable { min-width: 900px; }
+  .table-scroll table { border-radius: 0; }
+  .table-scroll::-webkit-scrollbar { height: 4px; }
+  .table-scroll::-webkit-scrollbar-track { background: var(--surface); }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   .table-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .table-title { font-size: 14px; font-weight: 700; }
   table { width: 100%; border-collapse: collapse; }
@@ -225,6 +232,9 @@
   .toast.error   { background: var(--red); }
 
   @media (max-width: 900px) {
+    main { padding: 12px; }
+    .filter-bar { padding: 10px 12px; gap: 8px; }
+    .table-wrap { border-radius: 8px; }
     .kpi-row { grid-template-columns: repeat(2, 1fr); }
     .chart-grid { grid-template-columns: 1fr; }
     .chart-grid.three { grid-template-columns: 1fr; }
@@ -364,13 +374,13 @@
       <div class="table-title">最近の依頼</div>
       <button class="btn btn-secondary" onclick="switchTab('list')">一覧・ステータス更新 →</button>
     </div>
-    <table>
+    <div class="table-scroll"><table>
       <thead><tr>
         <th>依頼日</th><th>紹介元事業所</th><th>担当者</th><th>種別</th><th>拠点</th>
         <th>ステータス</th><th>不成立理由</th><th></th>
       </tr></thead>
       <tbody id="recentTableBody"></tbody>
-    </table>
+    </table></div>
   </div>
 </div>
 
@@ -497,13 +507,13 @@
       <div class="table-title">依頼一覧</div>
       <span style="font-size:12px;color:var(--ink-3)" id="listCount"></span>
     </div>
-    <table>
+    <div class="table-scroll"><table>
       <thead><tr>
         <th>依頼日</th><th>紹介元事業所</th><th>担当者</th><th>種別</th><th>拠点</th>
         <th>患者名</th><th>ステータス</th><th>不成立理由</th><th>備考</th><th>操作</th>
       </tr></thead>
       <tbody id="listTableBody"></tbody>
-    </table>
+    </table></div>
   </div>
 </div>
 
@@ -530,13 +540,13 @@
       <div class="table-title">紹介元ランキング</div>
       <span style="font-size:12px;color:var(--ink-3)" id="rankingCount"></span>
     </div>
-    <table id="rankingTable">
+    <div class="table-scroll"><table id="rankingTable">
       <thead><tr>
         <th>順位</th><th>事業所名 <span style="font-size:10px;color:var(--ink-3);font-weight:400;">▶ クリックで担当者展開</span></th><th>種別</th><th>担当者（最新）</th>
         <th class="num">依頼</th><th class="num">成立</th><th class="num">不成立</th><th class="num">調整中</th><th class="num">成立率</th>
         <th>トレンド</th><th>最終依頼日</th>
       </tr></thead>
-    </table>
+    </table></div>
   </div>
 </div>
 
