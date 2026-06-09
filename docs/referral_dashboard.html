@@ -99,6 +99,7 @@
   .chart-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
   .chart-grid.three { grid-template-columns: 1fr 1fr 1fr; }
   .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .chart-wrap { position: relative; height: 220px; }
   .chart-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
   .chart-title { font-size: 14px; font-weight: 700; }
   .chart-sub { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
@@ -311,13 +312,13 @@
       <div class="chart-header">
         <div><div class="chart-title">月別依頼件数推移</div><div class="chart-sub">依頼件数と成立件数の比較</div></div>
       </div>
-      <canvas id="chartMonthly" height="200"></canvas>
+      <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-header">
         <div><div class="chart-title">紹介元種別 構成比</div><div class="chart-sub">依頼件数ベース</div></div>
       </div>
-      <canvas id="chartDonut" height="200"></canvas>
+      <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
     </div>
   </div>
 
@@ -327,19 +328,19 @@
       <div class="chart-header">
         <div><div class="chart-title">不成立理由の内訳</div><div class="chart-sub">不成立件数の分類</div></div>
       </div>
-      <canvas id="chartNgReason" height="200"></canvas>
+      <div class="chart-wrap"><canvas id="chartNgReason"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-header">
         <div><div class="chart-title">紹介元別 成立率 TOP10</div><div class="chart-sub">件数5件以上を対象</div></div>
       </div>
-      <canvas id="chartOrgRate" height="200"></canvas>
+      <div class="chart-wrap"><canvas id="chartOrgRate"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-header">
         <div><div class="chart-title">拠点別 依頼推移</div><div class="chart-sub">芝浦 vs 城東</div></div>
       </div>
-      <canvas id="chartLocation" height="200"></canvas>
+      <div class="chart-wrap"><canvas id="chartLocation"></canvas></div>
     </div>
   </div>
 
@@ -1050,16 +1051,16 @@ function saveModal(){
   showToast('ステータスを更新しました','success');
 }
 
-async function pushUpdateToGAS(row){
+function pushUpdateToGAS(row){
   try{
-    await fetch(gasUrl,{method:'POST',body:JSON.stringify({action:'update',row}),headers:{'Content-Type':'application/json'}});
-  }catch(e){console.warn('GAS update failed',e);}
+    fetch(gasUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'update',row}), headers:{'Content-Type':'application/json'}});
+  }catch(e){ console.warn('GAS update failed',e); }
 }
 
 // ============================================================
 //  INPUT
 // ============================================================
-async function submitReferral(){
+function submitReferral(){
   const row={
     id:`local-${Date.now()}`,
     date:    document.getElementById('inDate').value,
@@ -1080,7 +1081,7 @@ async function submitReferral(){
   }
   if(gasUrl){
     try{
-      await fetch(gasUrl,{method:'POST',body:JSON.stringify({action:'add',row}),headers:{'Content-Type':'application/json'}});
+      fetch(gasUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'add',row}), headers:{'Content-Type':'application/json'}});
     }catch(e){ showToast('GAS送信に失敗（ローカルに保存）'); }
   }
   allData.unshift(row);
@@ -1114,27 +1115,55 @@ function clearForm(){
 // ============================================================
 //  GAS
 // ============================================================
-async function fetchFromGAS(){
+function fetchFromGAS(){
   if(!gasUrl) return;
-  try{
-    const res=await fetch(`${gasUrl}?action=get`);
-    const json=await res.json();
-    if(json.data&&json.data.length>0){
-      allData=json.data.map(r=>({
-        id: r['登録日時']||Math.random().toString(),
-        date:r['依頼日']||'', org:r['事業所名']||'', person:r['担当者名']||'',
-        type:r['種別']||'', location:r['拠点']||'', patient:r['患者名']||'',
-        status:r['ステータス']||'調整中', reason:r['不成立理由']||'', note:r['備考']||'',
+  const callbackName = 'gasCallback_' + Date.now();
+  const script = document.createElement('script');
+  const timer = setTimeout(()=>{
+    document.getElementById('connectionStatus').innerHTML='<span class="status-dot disconnected"></span>接続失敗（タイムアウト）';
+    showToast('接続に失敗しました','error');
+    renderAll();
+    delete window[callbackName];
+    script.remove();
+  }, 10000);
+
+  window[callbackName] = function(json){
+    clearTimeout(timer);
+    delete window[callbackName];
+    script.remove();
+    if(json.data && json.data.length > 0){
+      allData = json.data.map(r=>({
+        id:     r['登録日時']||Math.random().toString(),
+        date:   r['依頼日']||'',
+        org:    r['事業所名']||'',
+        person: r['担当者名']||'',
+        type:   r['種別']||'',
+        location: r['拠点']||'',
+        patient:  r['患者名']||'',
+        status:   r['ステータス']||'調整中',
+        reason:   r['不成立理由']||'',
+        note:     r['備考']||'',
       })).sort((a,b)=>b.date.localeCompare(a.date));
       document.getElementById('demoBanner').style.display='none';
       document.getElementById('headerStatus').innerHTML='<span class="status-dot connected"></span>スプレッドシート接続中';
       document.getElementById('connectionStatus').innerHTML='<span class="status-dot connected"></span>接続済み';
-      renderAll(); showToast('データを取得しました','success');
-    } else { renderAll(); }
-  }catch(e){
+      renderAll();
+      showToast('データを取得しました','success');
+    } else {
+      renderAll();
+      showToast('接続成功（データ0件）','success');
+    }
+  };
+
+  script.src = `${gasUrl}?action=get&callback=${callbackName}`;
+  script.onerror = ()=>{
+    clearTimeout(timer);
     document.getElementById('connectionStatus').innerHTML='<span class="status-dot disconnected"></span>接続失敗';
-    showToast('接続に失敗しました','error'); renderAll();
-  }
+    showToast('接続に失敗しました','error');
+    renderAll();
+    delete window[callbackName];
+  };
+  document.head.appendChild(script);
 }
 
 function saveGasUrl(){
