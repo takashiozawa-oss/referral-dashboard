@@ -90,6 +90,7 @@
   .type-hospital { background: #ede9fe; color: #7c3aed; }
   .type-facility { background: #fef3c7; color: #d97706; }
   .type-other    { background: var(--surface); color: var(--ink-3); }
+  .type-houkan   { background: #cffafe; color: #0891b2; }
   .loc-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
   .loc-shibaura { background: #e8edfb; color: #3563e9; }
   .loc-joto     { background: #ede9fe; color: #7c3aed; }
@@ -479,6 +480,7 @@
             <option>地域包括</option>
             <option>病院・クリニック</option>
             <option>施設</option>
+            <option>訪問看護</option>
             <option>その他</option>
           </select>
         </div>
@@ -627,6 +629,7 @@
       <option>地域包括</option>
       <option>病院・クリニック</option>
       <option>施設</option>
+      <option>訪問看護</option>
     </select>
     <button class="btn btn-primary" onclick="buildRankingTable()">更新</button>
   </div>
@@ -825,6 +828,7 @@ const TYPE_COLORS = {
   '地域包括':      '#1ab87a',
   '病院・クリニック':'#8b5cf6',
   '施設':          '#f59e0b',
+  '訪問看護':      '#06b6d4',
   'その他':        '#94a3b8',
 };
 const NG_COLORS = ['#ef4444','#f97316','#f59e0b','#8b5cf6','#64748b','#94a3b8'];
@@ -878,50 +882,59 @@ function generateDemoData() {
 // ============================================================
 //  INIT
 // ============================================================
+// 年セレクター初期化（グローバル関数 - fetchFromGAS完了後にも呼べるよう外出し）
+function initYearSelects(){
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const thisMonthNum = now.getMonth() + 1;
+  const years = allData.length
+    ? [...new Set(allData.map(d=>d.date.slice(0,4)))].map(Number).sort()
+    : [];
+  const minY = years.length ? Math.min(...years) : thisYear - 2;
+  const maxY = thisYear + 1;
+  const yearIds = ['filterYear1','filterYear2','listYear1','listYear2',
+                   'rankYear1','rankYear2','cmpAYear1','cmpAYear2','cmpBYear1','cmpBYear2'];
+  yearIds.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const cur = el.value; // 現在の選択値を保持
+    el.innerHTML = '';
+    for(let y = minY; y <= maxY; y++){
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      if(String(y) === String(cur)) opt.selected = true;
+      el.appendChild(opt);
+    }
+    // 値が未設定の場合のみデフォルトを設定
+    if(!el.value) el.value = thisYear;
+  });
+  // 未設定のセレクターにのみデフォルト値を設定
+  const setYMIfEmpty = (yId, mId, year, month) => {
+    const ye = document.getElementById(yId);
+    const me = document.getElementById(mId);
+    if(ye && !ye.dataset.initialized){
+      ye.value = year;
+      ye.dataset.initialized = '1';
+    }
+    if(me && !me.dataset.initialized){
+      me.value = String(month).padStart(2,'0');
+      me.dataset.initialized = '1';
+    }
+  };
+  setYMIfEmpty('filterYear1','filterMonth1', thisYear, 1);
+  setYMIfEmpty('filterYear2','filterMonth2', thisYear, thisMonthNum);
+  setYMIfEmpty('listYear1','listMonth1', thisYear, 1);
+  setYMIfEmpty('listYear2','listMonth2', thisYear, thisMonthNum);
+  setYMIfEmpty('rankYear1','rankMonth1', thisYear, 1);
+  setYMIfEmpty('rankYear2','rankMonth2', thisYear, thisMonthNum);
+  setYMIfEmpty('cmpAYear1','cmpAMonth1', thisYear - 1, 1);
+  setYMIfEmpty('cmpAYear2','cmpAMonth2', thisYear - 1, 12);
+  setYMIfEmpty('cmpBYear1','cmpBMonth1', thisYear, 1);
+  setYMIfEmpty('cmpBYear2','cmpBMonth2', thisYear, thisMonthNum);
+}
+
 window.addEventListener('DOMContentLoaded',()=>{
   const now = new Date();
-  const thisYear  = now.getFullYear();
-  const thisMonthNum = now.getMonth() + 1;
-
-  // 年セレクター初期化（データの最小年〜来年）
-  function initYearSelects(){
-    const years = allData.length
-      ? [...new Set(allData.map(d=>d.date.slice(0,4)))].map(Number).sort()
-      : [];
-    const minY = years.length ? Math.min(...years) : thisYear - 2;
-    const maxY = thisYear + 1;
-    const yearIds = ['filterYear1','filterYear2','listYear1','listYear2',
-                     'rankYear1','rankYear2','cmpAYear1','cmpAYear2','cmpBYear1','cmpBYear2'];
-    yearIds.forEach(id=>{
-      const el = document.getElementById(id);
-      if(!el) return;
-      el.innerHTML = '';
-      for(let y = minY; y <= maxY; y++){
-        const opt = document.createElement('option');
-        opt.value = y; opt.textContent = y;
-        el.appendChild(opt);
-      }
-    });
-    // デフォルト値設定
-    const setYM = (yId, mId, year, month) => {
-      const ye = document.getElementById(yId);
-      const me = document.getElementById(mId);
-      if(ye) ye.value = year;
-      if(me) me.value = String(month).padStart(2,'0');
-    };
-    setYM('filterYear1','filterMonth1', thisYear, 1);
-    setYM('filterYear2','filterMonth2', thisYear, thisMonthNum);
-    setYM('listYear1','listMonth1', thisYear, 1);
-    setYM('listYear2','listMonth2', thisYear, thisMonthNum);
-    setYM('rankYear1','rankMonth1', thisYear, 1);
-    setYM('rankYear2','rankMonth2', thisYear, thisMonthNum);
-    // 比較タブ: AをA期間(昨年)、BをB期間(今年)のデフォルト
-    setYM('cmpAYear1','cmpAMonth1', thisYear - 1, 1);
-    setYM('cmpAYear2','cmpAMonth2', thisYear - 1, 12);
-    setYM('cmpBYear1','cmpBMonth1', thisYear, 1);
-    setYM('cmpBYear2','cmpBMonth2', thisYear, thisMonthNum);
-  }
-
   initYearSelects();
   buildColumnTable();
   buildGasCode();
@@ -946,10 +959,8 @@ function getYM(yearId, monthId){
 //  FILTER HELPERS
 // ============================================================
 function getFilteredData(fromId='filterFrom', toId='filterTo', locId='filterLocation', typeId='filterType', statusId=null){
-  const from = getYM(fromId+'Year1'||'', fromId+'Month1'||'') ||
-               document.getElementById(fromId)?.value || '';
-  const to   = getYM(toId+'Year2'||'', toId+'Month2'||'') ||
-               document.getElementById(toId)?.value || '';
+  const from = document.getElementById(fromId)?.value || '';
+  const to   = document.getElementById(toId)?.value   || '';
   const loc  = document.getElementById(locId)?.value||'all';
   const typ  = document.getElementById(typeId)?.value||'all';
   const st   = statusId?document.getElementById(statusId)?.value||'all':'all';
@@ -1357,8 +1368,8 @@ function buildCompare(){
 //  RANKING TABLE
 // ============================================================
 function buildRankingTable(){
-  const from = document.getElementById('rankFrom')?.value || '';
-  const to   = document.getElementById('rankTo')?.value   || '';
+  const from = getYM('rankYear1','rankMonth1');
+  const to   = getYM('rankYear2','rankMonth2');
   const type = document.getElementById('rankType')?.value || 'all';
 
   // 新しい順にソートしてフィルタ
@@ -1686,6 +1697,7 @@ function fetchFromGAS(){
       document.getElementById('demoBanner').style.display='none';
       document.getElementById('headerStatus').innerHTML='<span class="status-dot connected"></span>スプレッドシート接続中';
       document.getElementById('connectionStatus').innerHTML='<span class="status-dot connected"></span>接続済み';
+      initYearSelects(); // 実データの年範囲でセレクターを再構築
       renderAll();
       showToast('データを取得しました','success');
     } else {
@@ -1727,7 +1739,7 @@ function switchTab(id){
 }
 
 function typeClass(t){
-  return {ケアマネ事業所:'type-cm',地域包括:'type-chiiki','病院・クリニック':'type-hospital',施設:'type-facility'}[t]||'type-other';
+  return {ケアマネ事業所:'type-cm',地域包括:'type-chiiki','病院・クリニック':'type-hospital',施設:'type-facility',訪問看護:'type-houkan'}[t]||'type-other';
 }
 function locClass(l){
   return {'芝浦拠点':'loc-shibaura','城東拠点':'loc-joto'}[l]||'loc-all';
