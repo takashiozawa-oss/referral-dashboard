@@ -241,6 +241,45 @@
     .input-grid { grid-template-columns: 1fr; }
     .form-row { grid-template-columns: 1fr; }
   }
+
+  /* YEAR-MONTH SELECTOR */
+  .ym-select { display: inline-flex; align-items: center; gap: 4px; }
+  .ym-select select { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-family: var(--font-ja); font-size: 13px; color: var(--ink); background: var(--surface); outline: none; cursor: pointer; }
+  .ym-select select:focus { border-color: var(--accent); }
+
+  /* COMPARE TAB */
+  .compare-period-bar { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .period-block { display: flex; align-items: center; gap: 10px; }
+  .period-label { font-size: 12px; font-weight: 700; color: #fff; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+  .period-label.a { background: var(--accent); }
+  .period-label.b { background: #8b5cf6; }
+
+  /* CHANGE BLOCKS */
+  .change-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .change-block { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .change-block-head { padding: 12px 16px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+  .change-block-head.new    { background: #f0fdf8; color: var(--green); }
+  .change-block-head.surge  { background: #e8edfb; color: var(--accent); }
+  .change-block-head.drop   { background: #fef3c7; color: #d97706; }
+  .change-block-head.gone   { background: #fee2e2; color: var(--red); }
+  .change-item { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  .change-item:last-child { border-bottom: none; }
+  .change-item-name { font-weight: 600; }
+  .change-item-meta { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+  .change-badge { font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .days-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; background: var(--red-l); color: var(--red); }
+  .days-badge.warn { background: var(--amber-l); color: #d97706; }
+  .days-badge.ok   { background: var(--green-l); color: var(--green); }
+  .empty-block { padding: 20px; text-align: center; color: var(--ink-3); font-size: 13px; }
+
+  /* SEARCH BAR */
+  .search-input { border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px 8px 36px; font-family: var(--font-ja); font-size: 13px; color: var(--ink); background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237b839e' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 12px center; outline: none; min-width: 220px; }
+  .search-input:focus { border-color: var(--accent); background-color: #fff; }
+
+  @media (max-width: 900px) {
+    .change-grid { grid-template-columns: 1fr; }
+    .compare-period-bar { gap: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -265,6 +304,7 @@
   <button class="tab-btn" onclick="switchTab('input')">➕ 依頼登録</button>
   <button class="tab-btn" onclick="switchTab('list')">📋 依頼一覧・更新</button>
   <button class="tab-btn" onclick="switchTab('ranking')">🏆 紹介元ランキング</button>
+  <button class="tab-btn" onclick="switchTab('compare')">🔀 比較分析</button>
   <button class="tab-btn" onclick="switchTab('settings')">⚙️ 設定</button>
 </div>
 
@@ -278,9 +318,27 @@
 
   <div class="filter-bar">
     <span class="filter-label">期間</span>
-    <input type="month" id="filterFrom">
+<div class="ym-select">
+      <select id="filterYear1"></select>年
+      <select id="filterMonth1">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
     <span style="color:var(--ink-3)">〜</span>
-    <input type="month" id="filterTo">
+    <div class="ym-select">
+      <select id="filterYear2"></select>年
+      <select id="filterMonth2">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
     <div class="filter-sep"></div>
     <span class="filter-label">拠点</span>
     <select id="filterLocation">
@@ -481,9 +539,27 @@
 <div class="tab-panel" id="tab-list">
   <div class="filter-bar">
     <span class="filter-label">期間</span>
-    <input type="month" id="listFrom">
+<div class="ym-select">
+      <select id="listYear1"></select>年
+      <select id="listMonth1">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
     <span style="color:var(--ink-3)">〜</span>
-    <input type="month" id="listTo">
+    <div class="ym-select">
+      <select id="listYear2"></select>年
+      <select id="listMonth2">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
     <div class="filter-sep"></div>
     <span class="filter-label">ステータス</span>
     <select id="listStatus">
@@ -505,6 +581,7 @@
   <div class="table-wrap">
     <div class="table-header">
       <div class="table-title">依頼一覧</div>
+      <input type="text" class="search-input" id="listSearch" placeholder="患者名・事業所名・担当者名で検索..." oninput="buildListTable()">
       <span style="font-size:12px;color:var(--ink-3)" id="listCount"></span>
     </div>
     <div class="table-scroll"><table>
@@ -521,9 +598,27 @@
 <div class="tab-panel" id="tab-ranking">
   <div class="filter-bar">
     <span class="filter-label">期間</span>
-    <input type="month" id="rankFrom">
+<div class="ym-select">
+      <select id="rankYear1"></select>年
+      <select id="rankMonth1">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
     <span style="color:var(--ink-3)">〜</span>
-    <input type="month" id="rankTo">
+    <div class="ym-select">
+      <select id="rankYear2"></select>年
+      <select id="rankMonth2">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
     <div class="filter-sep"></div>
     <span class="filter-label">種別</span>
     <select id="rankType">
@@ -541,6 +636,83 @@
       <span style="font-size:12px;color:var(--ink-3)" id="rankingCount"></span>
     </div>
     <div class="table-scroll" id="rankingTableContainer"></div>
+  </div>
+</div>
+
+<!-- ======== COMPARE ======== -->
+<div class="tab-panel" id="tab-compare">
+  <div class="compare-period-bar">
+    <span class="period-label a">期間 A</span>
+    <div class="ym-select">
+      <select id="cmpAYear1"></select>年
+      <select id="cmpAMonth1">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div><span style="color:var(--ink-3)">〜</span><div class="ym-select">
+      <select id="cmpAYear2"></select>年
+      <select id="cmpAMonth2">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
+    <div class="filter-sep"></div>
+    <span class="period-label b">期間 B</span>
+    <div class="ym-select">
+      <select id="cmpBYear1"></select>年
+      <select id="cmpBMonth1">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div><span style="color:var(--ink-3)">〜</span><div class="ym-select">
+      <select id="cmpBYear2"></select>年
+      <select id="cmpBMonth2">
+        <option value="01">1月</option><option value="02">2月</option>
+        <option value="03">3月</option><option value="04">4月</option>
+        <option value="05">5月</option><option value="06">6月</option>
+        <option value="07">7月</option><option value="08">8月</option>
+        <option value="09">9月</option><option value="10">10月</option>
+        <option value="11">11月</option><option value="12">12月</option>
+      </select>月</div>
+    <button class="btn btn-primary" onclick="buildCompare()">比較する</button>
+  </div>
+
+  <!-- パターンY: 変化フォーカス -->
+  <div class="change-grid" id="changeGrid">
+    <div class="change-block">
+      <div class="change-block-head new">🟢 新規出現 <span style="font-weight:400;font-size:11px;">（A期間0件→B期間1件以上）</span></div>
+      <div id="blockNew"><div class="empty-block">比較するをクリックしてください</div></div>
+    </div>
+    <div class="change-block">
+      <div class="change-block-head surge">📈 急増 <span style="font-weight:400;font-size:11px;">（B期間がA期間の1.5倍以上）</span></div>
+      <div id="blockSurge"><div class="empty-block">比較するをクリックしてください</div></div>
+    </div>
+    <div class="change-block">
+      <div class="change-block-head drop">📉 減少 <span style="font-weight:400;font-size:11px;">（A期間よりB期間が少ない）</span></div>
+      <div id="blockDrop"><div class="empty-block">比較するをクリックしてください</div></div>
+    </div>
+    <div class="change-block">
+      <div class="change-block-head gone">🔴 消滅 <span style="font-weight:400;font-size:11px;">（A期間1件以上→B期間0件）</span></div>
+      <div id="blockGone"><div class="empty-block">比較するをクリックしてください</div></div>
+    </div>
+  </div>
+
+  <!-- パターンX: 全事業所横並び -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <div class="table-title">全事業所 期間比較表</div>
+      <span style="font-size:12px;color:var(--ink-3)" id="compareCount"></span>
+    </div>
+    <div class="table-scroll" id="compareTableContainer"></div>
   </div>
 </div>
 
@@ -708,11 +880,49 @@ function generateDemoData() {
 // ============================================================
 window.addEventListener('DOMContentLoaded',()=>{
   const now = new Date();
-  const thisYear = now.getFullYear();
-  const thisMonth = `${thisYear}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const yearStart = `${thisYear}-01`;
-  ['filterFrom','listFrom','rankFrom'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=yearStart; });
-  ['filterTo','listTo','rankTo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=thisMonth; });
+  const thisYear  = now.getFullYear();
+  const thisMonthNum = now.getMonth() + 1;
+
+  // 年セレクター初期化（データの最小年〜来年）
+  function initYearSelects(){
+    const years = allData.length
+      ? [...new Set(allData.map(d=>d.date.slice(0,4)))].map(Number).sort()
+      : [];
+    const minY = years.length ? Math.min(...years) : thisYear - 2;
+    const maxY = thisYear + 1;
+    const yearIds = ['filterYear1','filterYear2','listYear1','listYear2',
+                     'rankYear1','rankYear2','cmpAYear1','cmpAYear2','cmpBYear1','cmpBYear2'];
+    yearIds.forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.innerHTML = '';
+      for(let y = minY; y <= maxY; y++){
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y;
+        el.appendChild(opt);
+      }
+    });
+    // デフォルト値設定
+    const setYM = (yId, mId, year, month) => {
+      const ye = document.getElementById(yId);
+      const me = document.getElementById(mId);
+      if(ye) ye.value = year;
+      if(me) me.value = String(month).padStart(2,'0');
+    };
+    setYM('filterYear1','filterMonth1', thisYear, 1);
+    setYM('filterYear2','filterMonth2', thisYear, thisMonthNum);
+    setYM('listYear1','listMonth1', thisYear, 1);
+    setYM('listYear2','listMonth2', thisYear, thisMonthNum);
+    setYM('rankYear1','rankMonth1', thisYear, 1);
+    setYM('rankYear2','rankMonth2', thisYear, thisMonthNum);
+    // 比較タブ: AをA期間(昨年)、BをB期間(今年)のデフォルト
+    setYM('cmpAYear1','cmpAMonth1', thisYear - 1, 1);
+    setYM('cmpAYear2','cmpAMonth2', thisYear - 1, 12);
+    setYM('cmpBYear1','cmpBMonth1', thisYear, 1);
+    setYM('cmpBYear2','cmpBMonth2', thisYear, thisMonthNum);
+  }
+
+  initYearSelects();
   buildColumnTable();
   buildGasCode();
   document.getElementById('inDate').value = now.toISOString().slice(0,10);
@@ -724,15 +934,25 @@ window.addEventListener('DOMContentLoaded',()=>{
   else renderAll();
 });
 
+// 年月セレクターから "YYYY-MM" を取得するヘルパー
+function getYM(yearId, monthId){
+  const y = document.getElementById(yearId)?.value || '';
+  const m = document.getElementById(monthId)?.value || '';
+  if(!y || !m) return '';
+  return `${y}-${m}`;
+}
+
 // ============================================================
 //  FILTER HELPERS
 // ============================================================
 function getFilteredData(fromId='filterFrom', toId='filterTo', locId='filterLocation', typeId='filterType', statusId=null){
-  const from=document.getElementById(fromId)?.value||'';
-  const to  =document.getElementById(toId)?.value||'';
-  const loc =document.getElementById(locId)?.value||'all';
-  const typ =document.getElementById(typeId)?.value||'all';
-  const st  =statusId?document.getElementById(statusId)?.value||'all':'all';
+  const from = getYM(fromId+'Year1'||'', fromId+'Month1'||'') ||
+               document.getElementById(fromId)?.value || '';
+  const to   = getYM(toId+'Year2'||'', toId+'Month2'||'') ||
+               document.getElementById(toId)?.value || '';
+  const loc  = document.getElementById(locId)?.value||'all';
+  const typ  = document.getElementById(typeId)?.value||'all';
+  const st   = statusId?document.getElementById(statusId)?.value||'all':'all';
   return allData.filter(d=>{
     const ym=d.date.slice(0,7);
     if(from&&ym<from) return false;
@@ -760,13 +980,24 @@ function getMonthRange(from,to){
 //  RENDER ALL
 // ============================================================
 function renderAll(){
-  const data=getFilteredData();
+  const from = getYM('filterYear1','filterMonth1');
+  const to   = getYM('filterYear2','filterMonth2');
+  const loc  = document.getElementById('filterLocation')?.value||'all';
+  const typ  = document.getElementById('filterType')?.value||'all';
+  const data = allData.filter(d=>{
+    const ym=d.date.slice(0,7);
+    if(from&&ym<from) return false;
+    if(to  &&ym>to)   return false;
+    if(loc!=='all'&&d.location!==loc) return false;
+    if(typ!=='all'&&d.type!==typ) return false;
+    return true;
+  });
   renderKPI(data);
-  renderMonthlyChart(data);
+  renderMonthlyChart(data, from, to);
   renderDonutChart(data);
   renderNgReasonChart(data);
   renderOrgRateChart(data);
-  renderLocationChart(data);
+  renderLocationChart(data, from, to);
   renderRecentTable(data.slice(0,10));
   buildOrgDatalist();
 }
@@ -797,9 +1028,9 @@ function set(id,html){ document.getElementById(id).innerHTML=html; }
 const charts={};
 function dc(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
 
-function renderMonthlyChart(data){
+function renderMonthlyChart(data, from, to){
   dc('monthly');
-  const months=getMonthRange(document.getElementById('filterFrom').value, document.getElementById('filterTo').value);
+  const months=getMonthRange(from||getYM('filterYear1','filterMonth1'), to||getYM('filterYear2','filterMonth2'));
   charts['monthly']=new Chart(document.getElementById('chartMonthly'),{
     type:'bar',
     data:{
@@ -872,9 +1103,9 @@ function renderOrgRateChart(data){
   });
 }
 
-function renderLocationChart(data){
+function renderLocationChart(data, from, to){
   dc('location');
-  const months=getMonthRange(document.getElementById('filterFrom').value, document.getElementById('filterTo').value);
+  const months=getMonthRange(from||getYM('filterYear1','filterMonth1'), to||getYM('filterYear2','filterMonth2'));
   charts['location']=new Chart(document.getElementById('chartLocation'),{
     type:'line',
     data:{
@@ -914,16 +1145,21 @@ function renderRecentTable(data){
 //  LIST TABLE
 // ============================================================
 function buildListTable(){
-  const from=document.getElementById('listFrom').value;
-  const to  =document.getElementById('listTo').value;
-  const loc =document.getElementById('listLocation').value;
-  const st  =document.getElementById('listStatus').value;
-  const data=allData.filter(d=>{
+  const from = getYM('listYear1','listMonth1');
+  const to   = getYM('listYear2','listMonth2');
+  const loc  = document.getElementById('listLocation').value;
+  const st   = document.getElementById('listStatus').value;
+  const q    = (document.getElementById('listSearch')?.value||'').trim().toLowerCase();
+  const data = allData.filter(d=>{
     const ym=d.date.slice(0,7);
     if(from&&ym<from) return false;
     if(to  &&ym>to)   return false;
     if(loc!=='all'&&d.location!==loc) return false;
     if(st !=='all'&&d.status!==st) return false;
+    if(q){
+      const hay = [d.org,d.person,d.patient].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
     return true;
   });
   document.getElementById('listCount').textContent=`${data.length}件`;
@@ -944,6 +1180,179 @@ function buildListTable(){
     </tr>`).join('');
 }
 
+
+// ============================================================
+//  COMPARE
+// ============================================================
+function initCompareDefaults(){
+  // 年セレクターが空なら初期化
+  const y1 = document.getElementById('cmpAYear1');
+  if(y1 && !y1.options.length){
+    const now = new Date();
+    const thisYear = now.getFullYear();
+    const years = allData.length
+      ? [...new Set(allData.map(d=>d.date.slice(0,4)))].map(Number).sort()
+      : [];
+    const minY = years.length ? Math.min(...years) : thisYear - 2;
+    ['cmpAYear1','cmpAYear2','cmpBYear1','cmpBYear2'].forEach(id=>{
+      const el=document.getElementById(id); if(!el) return;
+      el.innerHTML='';
+      for(let y=minY;y<=thisYear+1;y++){
+        const o=document.createElement('option');
+        o.value=y; o.textContent=y; el.appendChild(o);
+      }
+    });
+    document.getElementById('cmpAYear1').value = thisYear-1;
+    document.getElementById('cmpAYear2').value = thisYear-1;
+    document.getElementById('cmpBYear1').value = thisYear;
+    document.getElementById('cmpBYear2').value = thisYear;
+  }
+}
+
+function buildCompare(){
+  const fromA = getYM('cmpAYear1','cmpAMonth1');
+  const toA   = getYM('cmpAYear2','cmpAMonth2');
+  const fromB = getYM('cmpBYear1','cmpBMonth1');
+  const toB   = getYM('cmpBYear2','cmpBMonth2');
+  if(!fromA||!toA||!fromB||!toB){ showToast('期間を正しく設定してください','error'); return; }
+  if(fromA>toA||fromB>toB){ showToast('開始月は終了月より前にしてください','error'); return; }
+
+  const today = new Date().toISOString().slice(0,10);
+
+  const dataA = allData.filter(d=>{ const ym=d.date.slice(0,7); return ym>=fromA&&ym<=toA; });
+  const dataB = allData.filter(d=>{ const ym=d.date.slice(0,7); return ym>=fromB&&ym<=toB; });
+
+  // 事業所別集計
+  const mapA = {}, mapB = {};
+  const countByOrg = (arr, map) => arr.forEach(d=>{
+    if(!map[d.org]) map[d.org]={org:d.org, type:d.type, count:0, lastDate:''};
+    map[d.org].count++;
+    if(!map[d.org].lastDate||d.date>map[d.org].lastDate) map[d.org].lastDate=d.date;
+  });
+  countByOrg(dataA, mapA);
+  countByOrg(dataB, mapB);
+
+  const allOrgs = [...new Set([...Object.keys(mapA),...Object.keys(mapB)])];
+
+  // 経過日数計算
+  const daysSince = (dateStr) => {
+    if(!dateStr) return null;
+    return Math.floor((new Date(today)-new Date(dateStr))/(1000*60*60*24));
+  };
+  const daysBadge = (days) => {
+    if(days===null) return '';
+    const cls = days>180?'':'days-badge warn'+(days>90?'':' ok').trim();
+    const realCls = days>180?'days-badge':days>90?'days-badge warn':'days-badge ok';
+    return `<span class="${realCls}">最終依頼 ${days}日前</span>`;
+  };
+
+  // パターンY：4ブロック
+  const newOrgs   = allOrgs.filter(o=>!mapA[o]&&mapB[o]);
+  const goneOrgs  = allOrgs.filter(o=>mapA[o]&&!mapB[o]);
+  const surgeOrgs = allOrgs.filter(o=>mapA[o]&&mapB[o]&&mapB[o].count>=mapA[o].count*1.5&&mapB[o].count>mapA[o].count);
+  const dropOrgs  = allOrgs.filter(o=>mapA[o]&&mapB[o]&&mapB[o].count<mapA[o].count);
+
+  const renderBlock = (id, items, renderFn) => {
+    const el = document.getElementById(id);
+    el.innerHTML = items.length
+      ? items.map(renderFn).join('')
+      : '<div class="empty-block">該当なし</div>';
+  };
+
+  renderBlock('blockNew', newOrgs.sort((a,b)=>(mapB[b]?.count||0)-(mapA[a]?.count||0)), o=>`
+    <div class="change-item">
+      <div>
+        <div class="change-item-name">${o}</div>
+        <div class="change-item-meta"><span class="type-badge ${typeClass(mapB[o].type)}">${mapB[o].type}</span></div>
+      </div>
+      <div class="change-badge" style="color:var(--green)">B期間 ${mapB[o].count}件</div>
+    </div>`);
+
+  renderBlock('blockSurge', surgeOrgs.sort((a,b)=>((mapB[b]?.count||0)-(mapA[b]?.count||0))-((mapB[a]?.count||0)-(mapA[a]?.count||0))), o=>{
+    const diff = (mapB[o]?.count||0)-(mapA[o]?.count||0);
+    return `<div class="change-item">
+      <div>
+        <div class="change-item-name">${o}</div>
+        <div class="change-item-meta">A:${mapA[o].count}件 → B:${mapB[o].count}件</div>
+      </div>
+      <div class="change-badge" style="color:var(--accent)">+${diff}件 ↑</div>
+    </div>`;
+  });
+
+  renderBlock('blockDrop', dropOrgs.sort((a,b)=>((mapB[a]?.count||0)-(mapA[a]?.count||0))-((mapB[b]?.count||0)-(mapA[b]?.count||0))), o=>{
+    const diff = (mapB[o]?.count||0)-(mapA[o]?.count||0);
+    return `<div class="change-item">
+      <div>
+        <div class="change-item-name">${o}</div>
+        <div class="change-item-meta">A:${mapA[o].count}件 → B:${mapB[o].count}件</div>
+      </div>
+      <div class="change-badge" style="color:var(--amber)">${diff}件 ↓</div>
+    </div>`;
+  });
+
+  renderBlock('blockGone', goneOrgs.sort((a,b)=>(mapA[b]?.count||0)-(mapA[a]?.count||0)), o=>{
+    const days = daysSince(mapA[o].lastDate);
+    return `<div class="change-item">
+      <div>
+        <div class="change-item-name">${o}</div>
+        <div class="change-item-meta">A期間 ${mapA[o].count}件 → B期間 0件 &nbsp;${daysBadge(days)}</div>
+      </div>
+      <div class="change-badge" style="color:var(--red)">消滅</div>
+    </div>`;
+  });
+
+  // パターンX：全事業所横並び表
+  document.getElementById('compareCount').textContent = `${allOrgs.length}件の事業所`;
+  const container = document.getElementById('compareTableContainer');
+
+  let tag = 'new';
+  const rows = allOrgs.map(o=>{
+    const a = mapA[o]?.count||0;
+    const b = mapB[o]?.count||0;
+    const diff = b - a;
+    const last = mapA[o]?.lastDate||mapB[o]?.lastDate||'';
+    const days = (!mapB[o]) ? daysSince(last) : null;
+    let changeLabel, changeColor;
+    if(!mapA[o])            { changeLabel='🟢 新規';  changeColor='var(--green)'; }
+    else if(!mapB[o])       { changeLabel='🔴 消滅';  changeColor='var(--red)'; }
+    else if(b>=a*1.5&&b>a)  { changeLabel='📈 急増';  changeColor='var(--accent)'; }
+    else if(b<a)            { changeLabel='📉 減少';  changeColor='var(--amber)'; }
+    else                    { changeLabel='→ 安定';  changeColor='var(--ink-3)'; }
+    const type = mapA[o]?.type||mapB[o]?.type||'';
+    return {o,a,b,diff,days,changeLabel,changeColor,type,last};
+  }).sort((x,y)=>Math.abs(y.diff)-Math.abs(x.diff));
+
+  const table = document.createElement('table');
+  table.style.cssText='min-width:700px;width:100%;border-collapse:collapse;';
+  table.innerHTML=`<thead style="background:var(--surface)"><tr>
+    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink-3);border-bottom:1px solid var(--border);">事業所名</th>
+    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink-3);border-bottom:1px solid var(--border);">種別</th>
+    <th style="padding:9px 14px;text-align:right;font-size:11px;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);">期間A</th>
+    <th style="padding:9px 14px;text-align:right;font-size:11px;font-weight:700;color:#8b5cf6;border-bottom:1px solid var(--border);">期間B</th>
+    <th style="padding:9px 14px;text-align:right;font-size:11px;font-weight:700;color:var(--ink-3);border-bottom:1px solid var(--border);">増減</th>
+    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink-3);border-bottom:1px solid var(--border);">判定</th>
+    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink-3);border-bottom:1px solid var(--border);">消滅後経過</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.style.borderBottom='1px solid var(--border)';
+    const diffStr = r.diff>0?`+${r.diff}`:String(r.diff);
+    const diffColor = r.diff>0?'var(--green)':r.diff<0?'var(--red)':'var(--ink-3)';
+    tr.innerHTML=`
+      <td style="padding:11px 14px;font-size:13px;font-weight:600;">${r.o}</td>
+      <td style="padding:11px 14px;"><span class="type-badge ${typeClass(r.type)}">${r.type}</span></td>
+      <td style="padding:11px 14px;text-align:right;font-size:13px;font-weight:600;color:var(--accent);">${r.a}</td>
+      <td style="padding:11px 14px;text-align:right;font-size:13px;font-weight:600;color:#8b5cf6;">${r.b}</td>
+      <td style="padding:11px 14px;text-align:right;font-size:13px;font-weight:700;color:${diffColor};">${r.diff===0?'±0':diffStr}</td>
+      <td style="padding:11px 14px;font-size:13px;font-weight:600;color:${r.changeColor};">${r.changeLabel}</td>
+      <td style="padding:11px 14px;font-size:12px;">${r.days!==null?`<span class="${r.days>180?'days-badge':r.days>90?'days-badge warn':'days-badge ok'}">${r.days}日前</span>`:'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.innerHTML='';
+  container.appendChild(table);
+}
 // ============================================================
 //  RANKING TABLE
 // ============================================================
@@ -1308,12 +1717,13 @@ function saveGasUrl(){
 //  UTILITIES
 // ============================================================
 function switchTab(id){
-  const ids=['dashboard','input','list','ranking','settings'];
+  const ids=['dashboard','input','list','ranking','compare','settings'];
   document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',ids[i]===id));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.getElementById(`tab-${id}`).classList.add('active');
   if(id==='ranking') buildRankingTable();
   if(id==='list')    buildListTable();
+  if(id==='compare')  initCompareDefaults();
 }
 
 function typeClass(t){
