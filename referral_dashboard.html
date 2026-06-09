@@ -946,10 +946,8 @@ function getYM(yearId, monthId){
 //  FILTER HELPERS
 // ============================================================
 function getFilteredData(fromId='filterFrom', toId='filterTo', locId='filterLocation', typeId='filterType', statusId=null){
-  const from = getYM(fromId+'Year1'||'', fromId+'Month1'||'') ||
-               document.getElementById(fromId)?.value || '';
-  const to   = getYM(toId+'Year2'||'', toId+'Month2'||'') ||
-               document.getElementById(toId)?.value || '';
+  const from = document.getElementById(fromId)?.value || '';
+  const to   = document.getElementById(toId)?.value   || '';
   const loc  = document.getElementById(locId)?.value||'all';
   const typ  = document.getElementById(typeId)?.value||'all';
   const st   = statusId?document.getElementById(statusId)?.value||'all':'all';
@@ -1357,8 +1355,8 @@ function buildCompare(){
 //  RANKING TABLE
 // ============================================================
 function buildRankingTable(){
-  const from = document.getElementById('rankFrom')?.value || '';
-  const to   = document.getElementById('rankTo')?.value   || '';
+  const from = getYM('rankYear1','rankMonth1');
+  const to   = getYM('rankYear2','rankMonth2');
   const type = document.getElementById('rankType')?.value || 'all';
 
   // 新しい順にソートしてフィルタ
