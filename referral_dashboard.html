@@ -540,13 +540,7 @@
       <div class="table-title">紹介元ランキング</div>
       <span style="font-size:12px;color:var(--ink-3)" id="rankingCount"></span>
     </div>
-    <div class="table-scroll"><table id="rankingTable">
-      <thead><tr>
-        <th>順位</th><th>事業所名 <span style="font-size:10px;color:var(--ink-3);font-weight:400;">▶ クリックで担当者展開</span></th><th>種別</th><th>担当者（最新）</th>
-        <th class="num">依頼</th><th class="num">成立</th><th class="num">不成立</th><th class="num">調整中</th><th class="num">成立率</th>
-        <th>トレンド</th><th>最終依頼日</th>
-      </tr></thead>
-    </table></div>
+    <div class="table-scroll" id="rankingTableContainer"></div>
   </div>
 </div>
 
@@ -954,85 +948,113 @@ function buildListTable(){
 //  RANKING TABLE
 // ============================================================
 function buildRankingTable(){
-  const from=document.getElementById('rankFrom')?.value||'';
-  const to  =document.getElementById('rankTo')?.value||'';
-  const type=document.getElementById('rankType')?.value||'all';
+  const from = document.getElementById('rankFrom')?.value || '';
+  const to   = document.getElementById('rankTo')?.value   || '';
+  const type = document.getElementById('rankType')?.value || 'all';
 
-  // allDataは日付降順（新しい順）でソート済みを前提に集計
-  const sorted=[...allData].sort((a,b)=>b.date.localeCompare(a.date));
-  const filtered=sorted.filter(d=>{
-    const ym=d.date.slice(0,7);
-    if(from&&ym<from) return false;
-    if(to  &&ym>to)   return false;
-    if(type!=='all'&&d.type!==type) return false;
-    return true;
-  });
-  const months=getMonthRange(from,to);
-  const half=Math.floor(months.length/2);
+  // 新しい順にソートしてフィルタ
+  const filtered = [...allData]
+    .sort((a,b) => b.date.localeCompare(a.date))
+    .filter(d => {
+      const ym = d.date.slice(0,7);
+      if(from && ym < from) return false;
+      if(to   && ym > to)   return false;
+      if(type !== 'all' && d.type !== type) return false;
+      return true;
+    });
 
-  // 事業所別集計（filteredは新しい順なので最初に出てきた担当者＝最新）
-  const orgMap={};
-  filtered.forEach(d=>{
+  const months = getMonthRange(from, to);
+  const half   = Math.floor(months.length / 2);
+
+  // 事業所別集計（filteredは新しい順 → 初出の担当者が最新）
+  const orgMap = {};
+  filtered.forEach(d => {
     if(!orgMap[d.org]){
-      orgMap[d.org]={
-        org:d.org, type:d.type,
-        person:d.person, // filteredは新しい順→最初が最新担当者
-        dates:[], ok:0, ng:0, pending:0, persons:{}
+      orgMap[d.org] = {
+        org: d.org, type: d.type,
+        latestPerson: d.person || '—',  // 最初に出てきた＝最新
+        dates: [], ok: 0, ng: 0, pending: 0, persons: {}
       };
     }
     orgMap[d.org].dates.push(d.date);
-    // personは上書きしない（最初＝最新を保持）
-    if(d.status==='成立')   orgMap[d.org].ok++;
-    if(d.status==='不成立') orgMap[d.org].ng++;
-    if(d.status==='調整中') orgMap[d.org].pending++;
+    if(d.status === '成立')   orgMap[d.org].ok++;
+    if(d.status === '不成立') orgMap[d.org].ng++;
+    if(d.status === '調整中') orgMap[d.org].pending++;
     // 担当者別集計
-    const pname=d.person||'（不明）';
-    if(!orgMap[d.org].persons[pname]) orgMap[d.org].persons[pname]={name:pname,ok:0,ng:0,pending:0,lastDate:''};
-    const p=orgMap[d.org].persons[pname];
-    if(d.status==='成立')   p.ok++;
-    if(d.status==='不成立') p.ng++;
-    if(d.status==='調整中') p.pending++;
-    if(!p.lastDate||d.date>p.lastDate) p.lastDate=d.date;
+    const pname = d.person || '（不明）';
+    if(!orgMap[d.org].persons[pname]){
+      orgMap[d.org].persons[pname] = {name:pname, ok:0, ng:0, pending:0, lastDate:''};
+    }
+    const p = orgMap[d.org].persons[pname];
+    if(d.status === '成立')   p.ok++;
+    if(d.status === '不成立') p.ng++;
+    if(d.status === '調整中') p.pending++;
+    if(!p.lastDate || d.date > p.lastDate) p.lastDate = d.date;
   });
 
-  const rows=Object.values(orgMap).sort((a,b)=>(b.ok+b.ng+b.pending)-(a.ok+a.ng+a.pending));
-  document.getElementById('rankingCount').textContent=`${rows.length}件の事業所`;
+  const rows = Object.values(orgMap).sort((a,b) =>
+    (b.ok+b.ng+b.pending) - (a.ok+a.ng+a.pending)
+  );
 
-  const table=document.getElementById('rankingTable');
-  // 既存tbody・tr（ブラウザが自動生成したものも含め）を完全クリア
-  while(table.rows.length > 1) table.deleteRow(1); // theadの1行(index0)は残す
-  while(table.tBodies.length) table.removeChild(table.tBodies[0]);
+  document.getElementById('rankingCount').textContent = `${rows.length}件の事業所`;
+
+  // ★テーブル全体をinnerHTMLで完全リセット（最も確実なクリア方法）
+  const container = document.getElementById('rankingTableContainer');
+  const thead = `<thead><tr>
+    <th>順位</th>
+    <th>事業所名 <span style="font-size:10px;color:var(--ink-3);font-weight:400;">▶ クリックで担当者展開</span></th>
+    <th>種別</th><th>担当者（最新）</th>
+    <th class="num">依頼</th><th class="num">成立</th><th class="num">不成立</th>
+    <th class="num">調整中</th><th class="num">成立率</th>
+    <th>トレンド</th><th>最終依頼日</th>
+  </tr></thead>`;
 
   if(!rows.length){
-    const empty=document.createElement('tbody');
-    empty.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">データなし</div></div></td></tr>`;
-    table.appendChild(empty);
+    container.innerHTML = `<table id="rankingTable" style="min-width:900px;width:100%;">${thead}
+      <tbody><tr><td colspan="11"><div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">データなし</div>
+      </div></td></tr></tbody></table>`;
     return;
   }
 
-  rows.forEach((r,i)=>{
-    const rank=i+1;
-    const orgId=`org-${i}-${Date.now()}`;
-    const bc=rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
-    const total=r.ok+r.ng+r.pending;
-    const decided=r.ok+r.ng;
-    const rate=decided>0?Math.round(r.ok/decided*100)+'%':'—';
-    const rateColor=decided>0?(r.ok/decided>=.7?'var(--green)':r.ok/decided>=.5?'var(--amber)':'var(--red)'):'var(--ink-3)';
-    const prevOk=months.slice(0,half).reduce((s,m)=>s+filtered.filter(d=>d.org===r.org&&d.date.slice(0,7)===m&&d.status==='成立').length,0);
-    const nextOk=months.slice(half).reduce((s,m)=>s+filtered.filter(d=>d.org===r.org&&d.date.slice(0,7)===m&&d.status==='成立').length,0);
-    const delta=nextOk-prevOk;
-    const dHtml=delta>0?`<span style="color:var(--green);font-weight:700;">↑+${delta}</span>`:delta<0?`<span style="color:var(--red);font-weight:700;">↓${delta}</span>`:`<span style="color:var(--ink-3);">→</span>`;
-    const last=[...r.dates].sort().slice(-1)[0]||'—';
-    const spark=buildSpark(r.dates,months);
-    const personCount=Object.keys(r.persons).length;
+  // 新しいtableを構築
+  const table = document.createElement('table');
+  table.id = 'rankingTable';
+  table.style.cssText = 'min-width:900px;width:100%;border-collapse:collapse;';
+  table.innerHTML = thead;
 
-    // 事業所行をtbodyに入れてtableに追加（<tr>を直接tableに入れない）
-    const orgTbody=document.createElement('tbody');
-    orgTbody.innerHTML=`<tr class="org-row" onclick="togglePersons('${orgId}', this)">
+  rows.forEach((r, i) => {
+    const rank    = i + 1;
+    const orgId   = `prow-${i}`;
+    const bc      = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
+    const total   = r.ok + r.ng + r.pending;
+    const decided = r.ok + r.ng;
+    const rate    = decided > 0 ? Math.round(r.ok/decided*100)+'%' : '—';
+    const rateColor = decided > 0
+      ? (r.ok/decided >= .7 ? 'var(--green)' : r.ok/decided >= .5 ? 'var(--amber)' : 'var(--red)')
+      : 'var(--ink-3)';
+    const prevOk = months.slice(0,half).reduce((s,m) =>
+      s + filtered.filter(d=>d.org===r.org&&d.date.slice(0,7)===m&&d.status==='成立').length, 0);
+    const nextOk = months.slice(half).reduce((s,m) =>
+      s + filtered.filter(d=>d.org===r.org&&d.date.slice(0,7)===m&&d.status==='成立').length, 0);
+    const delta  = nextOk - prevOk;
+    const dHtml  = delta>0
+      ? `<span style="color:var(--green);font-weight:700;">↑+${delta}</span>`
+      : delta<0
+      ? `<span style="color:var(--red);font-weight:700;">↓${delta}</span>`
+      : `<span style="color:var(--ink-3);">→</span>`;
+    const last   = [...r.dates].sort().slice(-1)[0] || '—';
+    const spark  = buildSpark(r.dates, months);
+    const personCount = Object.keys(r.persons).length;
+
+    // 事業所行tbody
+    const orgTbody = document.createElement('tbody');
+    orgTbody.innerHTML = `<tr class="org-row" onclick="togglePersons('${orgId}',this)">
       <td><span class="expand-icon">▶</span><span class="rank-badge ${bc}">${rank}</span></td>
       <td><strong>${r.org}</strong> <span style="font-size:11px;color:var(--ink-3);">担当${personCount}名</span></td>
       <td><span class="type-badge ${typeClass(r.type)}">${r.type}</span></td>
-      <td>${r.person||'—'}</td>
+      <td>${r.latestPerson}</td>
       <td class="num">${total}</td>
       <td class="num" style="color:var(--green)">${r.ok}</td>
       <td class="num" style="color:var(--red)">${r.ng}</td>
@@ -1043,20 +1065,23 @@ function buildRankingTable(){
     </tr>`;
     table.appendChild(orgTbody);
 
-    // 担当者tbody（折りたたみ）
-    const persons=Object.values(r.persons).sort((a,b)=>(b.ok+b.ng+b.pending)-(a.ok+a.ng+a.pending));
-    const personTbody=document.createElement('tbody');
-    personTbody.className='person-rows';
-    personTbody.id=orgId;
-    persons.forEach(p=>{
-      const ptotal=p.ok+p.ng+p.pending;
-      const pdecided=p.ok+p.ng;
-      const prate=pdecided>0?Math.round(p.ok/pdecided*100)+'%':'—';
-      const prateColor=pdecided>0?(p.ok/pdecided>=.7?'var(--green)':p.ok/pdecided>=.5?'var(--amber)':'var(--red)'):'var(--ink-3)';
-      const initial=p.name.replace(/[\u3000 ]/g,'').slice(0,1);
-      const tr=document.createElement('tr');
-      tr.className='person-row';
-      tr.innerHTML=`
+    // 担当者行tbody（アコーディオン）
+    const persons = Object.values(r.persons)
+      .sort((a,b) => (b.ok+b.ng+b.pending) - (a.ok+a.ng+a.pending));
+    const personTbody = document.createElement('tbody');
+    personTbody.className = 'person-rows';
+    personTbody.id = orgId;
+    persons.forEach(p => {
+      const ptotal   = p.ok + p.ng + p.pending;
+      const pdecided = p.ok + p.ng;
+      const prate    = pdecided>0 ? Math.round(p.ok/pdecided*100)+'%' : '—';
+      const prColor  = pdecided>0
+        ? (p.ok/pdecided>=.7?'var(--green)':p.ok/pdecided>=.5?'var(--amber)':'var(--red)')
+        : 'var(--ink-3)';
+      const initial  = p.name.replace(/[　 ]/g,'').slice(0,1);
+      const tr = document.createElement('tr');
+      tr.className = 'person-row';
+      tr.innerHTML = `
         <td style="padding-left:48px;">└</td>
         <td><span class="person-label"><span class="person-icon">${initial}</span>${p.name}</span></td>
         <td colspan="2" style="color:var(--ink-3);font-size:11px;">最終依頼：${p.lastDate||'—'}</td>
@@ -1064,13 +1089,17 @@ function buildRankingTable(){
         <td class="num" style="color:var(--green)">${p.ok}</td>
         <td class="num" style="color:var(--red)">${p.ng}</td>
         <td class="num" style="color:var(--amber)">${p.pending}</td>
-        <td class="num" style="color:${prateColor};font-weight:700;">${prate}</td>
+        <td class="num" style="color:${prColor};font-weight:700;">${prate}</td>
         <td colspan="2"></td>`;
       personTbody.appendChild(tr);
     });
     table.appendChild(personTbody);
   });
+
+  container.innerHTML = '';
+  container.appendChild(table);
 }
+
 
 function togglePersons(orgId, rowEl){
   const tbody=document.getElementById(orgId);
