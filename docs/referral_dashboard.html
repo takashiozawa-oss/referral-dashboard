@@ -622,6 +622,13 @@
         <option value="11">11月</option><option value="12">12月</option>
       </select>月</div>
     <div class="filter-sep"></div>
+    <span class="filter-label">拠点</span>
+    <select id="rankLocation">
+      <option value="all">全拠点</option>
+      <option>芝浦拠点</option>
+      <option>城東拠点</option>
+    </select>
+    <div class="filter-sep"></div>
     <span class="filter-label">種別</span>
     <select id="rankType">
       <option value="all">すべて</option>
@@ -1371,6 +1378,7 @@ function buildRankingTable(){
   const from = getYM('rankYear1','rankMonth1');
   const to   = getYM('rankYear2','rankMonth2');
   const type = document.getElementById('rankType')?.value || 'all';
+  const loc  = document.getElementById('rankLocation')?.value || 'all';
 
   // 新しい順にソートしてフィルタ
   const filtered = [...allData]
@@ -1380,6 +1388,7 @@ function buildRankingTable(){
       if(from && ym < from) return false;
       if(to   && ym > to)   return false;
       if(type !== 'all' && d.type !== type) return false;
+      if(loc  !== 'all' && d.location !== loc) return false;
       return true;
     });
 
