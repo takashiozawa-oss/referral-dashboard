@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>訪問診療 月間単価試算ツール（2026年改定対応）</title>
+<style>
+:root{
+  --t5:#E1F5EE;--t1:#9FE1CB;--t6:#0F6E56;--t8:#085041;
+  --b5:#E6F1FB;--b1:#B5D4F4;--b6:#185FA5;--b8:#0C447C;
+  --a5:#FAEEDA;--a1:#FAC775;--a6:#854F0B;--a8:#633806;
+  --g5:#F1EFE8;--g1:#D3D1C7;--g6:#5F5E5A;--g8:#444441;
+  --bg:#f0efe9;--card:#fff;--tx:#1a1a1a;--tx2:#5a5a5a;--tx3:#9a9a9a;
+  --bd:rgba(0,0,0,0.11);--bd2:rgba(0,0,0,0.22);
+  --r:12px;--r2:8px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#1a1a1c;--card:#242426;--tx:#f0f0f0;--tx2:#a0a0a0;--tx3:#606060;
+    --bd:rgba(255,255,255,0.1);--bd2:rgba(255,255,255,0.2);
+    --t5:#0a2e20;--t1:#1a5c3a;--b5:#0a1e35;--b1:#1a3f6e;
+    --a5:#2e1e05;--a1:#5c3a10;--g5:#1e1e18;--g1:#3a3a30;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif;font-size:14px;line-height:1.6;background:var(--bg);color:var(--tx);min-height:100vh;}
+.wrap{max-width:860px;margin:0 auto;padding:1.5rem 1rem 4rem;}
+h1{font-size:16px;font-weight:600;margin-bottom:2px;}
+.sub{font-size:11px;color:var(--tx2);margin-bottom:1.5rem;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+@media(max-width:600px){.grid{grid-template-columns:1fr;}}
+.card{background:var(--card);border:0.5px solid var(--bd);border-radius:var(--r);padding:1rem 1.1rem;margin-bottom:.75rem;}
+.card-title{font-size:12px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;}
+.field{margin-bottom:.75rem;}
+.field:last-child{margin-bottom:0;}
+label{font-size:12px;color:var(--tx2);display:block;margin-bottom:4px;}
+select,input[type=number]{width:100%;padding:7px 10px;border:0.5px solid var(--bd2);border-radius:var(--r2);background:var(--bg);color:var(--tx);font-size:13px;appearance:none;-webkit-appearance:none;}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;}
+input[type=number]{text-align:right;}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--bd);}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-label{font-size:13px;color:var(--tx);}
+.toggle-pts{font-size:11px;color:var(--tx3);margin-top:1px;}
+.toggle{position:relative;width:38px;height:22px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;position:absolute;}
+.slider{position:absolute;inset:0;background:var(--g1);border-radius:99px;transition:.2s;cursor:pointer;}
+.slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+input:checked+.slider{background:var(--t6);}
+input:checked+.slider:before{transform:translateX(16px);}
+/* 結果 */
+.result-card{background:var(--t8);color:#fff;border-radius:var(--r);padding:1.1rem 1.25rem;margin-bottom:.75rem;}
+.result-label{font-size:11px;opacity:.7;margin-bottom:4px;}
+.result-main{font-size:32px;font-weight:700;letter-spacing:-.02em;}
+.result-sub{font-size:12px;opacity:.65;margin-top:3px;}
+.split-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.split-box{background:rgba(255,255,255,0.12);border-radius:8px;padding:7px 10px;transition:opacity .2s;}
+.split-box-label{font-size:10px;opacity:.65;margin-bottom:2px;}
+.split-box-val{font-size:15px;font-weight:700;}
+/* 内訳 */
+.breakdown{background:var(--card);border:0.5px solid var(--bd);border-radius:var(--r);overflow:hidden;}
+.bk-row{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:0.5px solid var(--bd);font-size:13px;}
+.bk-row:last-child{border-bottom:none;}
+.bk-row.section{background:var(--bg);font-size:11px;color:var(--tx3);font-weight:500;letter-spacing:.04em;padding:5px 14px;}
+.bk-row.sub-iryo{background:var(--t5);font-weight:600;color:var(--t8);}
+.bk-row.sub-kaigo{background:var(--b5);font-weight:600;color:var(--b8);}
+.bk-row.grand-total{background:var(--t8);color:#fff;font-weight:700;}
+.bk-pts{font-size:12px;color:var(--tx2);text-align:right;}
+.bk-pts strong{color:var(--tx);font-size:13px;}
+.bk-yen{font-size:11px;color:var(--tx3);}
+/* 参考 */
+.ref-card{background:var(--card);border:0.5px solid var(--bd);border-radius:var(--r);margin-bottom:.75rem;}
+.ref-header{padding:.65rem 1rem;border-bottom:0.5px solid var(--bd);font-size:12px;font-weight:600;color:var(--tx2);}
+.ref-note{color:var(--a8);background:var(--a5);padding:.5rem 1rem;font-size:11px;}
+.ref-row{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;border-bottom:0.5px solid var(--bd);font-size:12px;}
+.ref-row:last-child{border-bottom:none;}
+.ref-row label{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--tx);}
+.ref-row label input[type=checkbox]{width:14px;height:14px;accent-color:var(--t6);}
+.ref-pts{font-size:11px;color:var(--tx3);}
+/* 注記 */
+.note-box{background:var(--a5);color:var(--a8);border-radius:var(--r2);padding:.65rem .9rem;font-size:11px;margin-top:.5rem;line-height:1.55;}
+/* スライダー */
+.slider-card{background:var(--card);border:0.5px solid var(--bd);border-radius:var(--r);padding:1rem 1.1rem;margin-bottom:.75rem;}
+.patient-display{display:flex;align-items:baseline;gap:6px;margin-bottom:.75rem;}
+.patient-num{font-size:36px;font-weight:700;color:var(--t6);letter-spacing:-.02em;line-height:1;}
+.patient-unit{font-size:13px;color:var(--tx2);}
+.range-wrap{margin-bottom:.5rem;}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:4px;
+  background:linear-gradient(to right,var(--t6) var(--pct,0%),var(--g1) var(--pct,0%));
+  border-radius:99px;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;
+  background:var(--t6);border:3px solid var(--card);box-shadow:0 1px 4px rgba(0,0,0,.25);transition:transform .1s;
+}
+input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
+input[type=range]::-moz-range-thumb{
+  width:20px;height:20px;border-radius:50%;background:var(--t6);border:3px solid var(--card);
+  box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:pointer;
+}
+.range-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-top:3px;}
+.revenue-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:.75rem;}
+.rev-box{background:var(--bg);border-radius:var(--r2);padding:.7rem .8rem;}
+.rev-box-label{font-size:10px;color:var(--tx3);margin-bottom:3px;}
+.rev-box-val{font-size:17px;font-weight:700;color:var(--t6);letter-spacing:-.01em;}
+.rev-box-sub{font-size:10px;color:var(--tx3);margin-top:1px;}
+.manual-input-row{display:flex;align-items:center;gap:8px;margin-top:.65rem;}
+.manual-input-row input[type=number]{width:90px;text-align:center;font-size:15px;font-weight:600;}
+.manual-input-row span{font-size:12px;color:var(--tx2);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>訪問診療 月間単価試算ツール</h1>
+  <p class="sub">令和8年（2026年）診療報酬改定対応版　※診療報酬1点＝10円・介護報酬1単位＝11.4円換算　※自費・材料費・指導管理料は別途</p>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="card-title">基本設定</div>
+        <div class="field">
+          <label>医療機関の種別（令和8年告示区分）</label>
+          <select id="kinoType" onchange="calc()">
+            <option value="kino_a" selected>機能強化型・イ（病床あり ／ 自院24h体制）</option>
+            <option value="kino_b">機能強化型・ロ（病床なし ／ 連携24h体制）</option>
+            <option value="ippan">一般型在支診</option>
+            <option value="other">在支診以外</option>
+          </select>
+          <div style="font-size:11px;color:var(--t6);margin-top:4px;padding:4px 8px;background:var(--t5);border-radius:var(--r2);">
+            ★ 機能強化型・病床あり・連携型 → <strong>イ区分（病床あり）</strong>に該当します
+          </div>
+        </div>
+        <div class="field">
+          <label>居住場所</label>
+          <select id="residence" onchange="calc()">
+            <option value="home" selected>在宅（自宅・一般賃貸）</option>
+            <option value="facility">施設（有料老人ホーム・GH等）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>単一建物の患者数</label>
+          <select id="building" onchange="calc()">
+            <option value="1" selected>1人（戸建て・独居中心）</option>
+            <option value="2_9">2〜9人</option>
+            <option value="10_19">10〜19人</option>
+            <option value="20_49">20〜49人</option>
+            <option value="50">50人以上</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>訪問パターン（月）</label>
+          <select id="visits" onchange="calc()">
+            <option value="heavy" selected>重症患者・月2回以上</option>
+            <option value="two">一般・月2回</option>
+            <option value="two_ol">月2回＋1回オンライン</option>
+            <option value="one">月1回</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>訪問診療料の同一建物区分</label>
+          <select id="sameBuilding" onchange="calc()">
+            <option value="other" selected>同一建物以外（888点）</option>
+            <option value="same">同一建物内（213点）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>月の訪問回数（訪問診療料の算定回数）</label>
+          <select id="visitCount" onchange="calc()">
+            <option value="1">1回/月</option>
+            <option value="2" selected>2回/月</option>
+            <option value="3">3回/月</option>
+            <option value="4">4回/月</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">在総管への加算</div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">在宅医療充実体制加算</div><div class="toggle-pts">届出必要 / 在総管への月次加算</div></div>
+          <label class="toggle"><input type="checkbox" id="jujitsu" onchange="calc()"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">包括的支援加算（150点）</div><div class="toggle-pts">届出不要 / 要介護3以上等</div></div>
+          <label class="toggle"><input type="checkbox" id="hokatsu" checked onchange="calc()"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">在宅移行早期加算（100点）</div><div class="toggle-pts">届出不要 / 移行後3か月以内</div></div>
+          <label class="toggle"><input type="checkbox" id="iko" onchange="calc()"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">在宅医療情報連携加算（100点）</div><div class="toggle-pts">届出必要 / ICT連携5機関以上</div></div>
+          <label class="toggle"><input type="checkbox" id="ict" onchange="calc()"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">居宅療養管理指導（Ⅱ）× 2回</div><div class="toggle-pts">介護保険 / 在総管算定患者・単一建物人数連動・×11.4円</div></div>
+          <label class="toggle"><input type="checkbox" id="kyotaku" onchange="calc()"><span class="slider"></span></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">物価・賃上げ対応</div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">ベースアップ評価料（継続・107点/回）</div><div class="toggle-pts">届出必要 / 訪問診療時・同一建物以外</div></div>
+          <label class="toggle"><input type="checkbox" id="base" checked onchange="calc()"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div><div class="toggle-label">物価対応料（3点/回）</div><div class="toggle-pts">届出不要 / 訪問診療時</div></div>
+          <label class="toggle"><input type="checkbox" id="bukka" checked onchange="calc()"><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="result-card">
+        <div class="result-label">月間推定単価（1患者あたり・合算）</div>
+        <div class="result-main" id="totalYen">—</div>
+        <div class="result-sub" id="totalPts">—</div>
+        <div class="split-grid">
+          <div class="split-box">
+            <div class="split-box-label">診療報酬（医療保険）</div>
+            <div class="split-box-val" id="iryoYen">—</div>
+          </div>
+          <div class="split-box" id="kaigoBadge">
+            <div class="split-box-label">介護報酬（居宅療養管理指導）</div>
+            <div class="split-box-val" id="kaigoYen">OFF</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="breakdown" id="breakdown"></div>
+      <div class="note-box" id="noteBox" style="display:none"></div>
+
+      <div class="slider-card" style="margin-top:.75rem">
+        <div class="card-title">売上試算　—　患者数を動かす</div>
+        <div class="patient-display">
+          <span class="patient-num" id="ptNumDisp">50</span>
+          <span class="patient-unit">人</span>
+        </div>
+        <div class="range-wrap">
+          <input type="range" id="ptSlider" min="0" max="500" step="1" value="50"
+            oninput="onSlider(this)" style="--pct:10%">
+        </div>
+        <div class="range-labels"><span>0人</span><span>125</span><span>250</span><span>375</span><span>500人</span></div>
+        <div class="manual-input-row">
+          <span>直接入力：</span>
+          <input type="number" id="ptManual" value="50" min="0" max="9999" oninput="onManual(this)">
+          <span>人</span>
+        </div>
+        <div class="revenue-grid">
+          <div class="rev-box">
+            <div class="rev-box-label">月間売上（診療報酬＋介護報酬）</div>
+            <div class="rev-box-val" id="revMonth">—</div>
+            <div class="rev-box-sub" id="revMonthSub"></div>
+          </div>
+          <div class="rev-box">
+            <div class="rev-box-label">年間売上（×12か月）</div>
+            <div class="rev-box-val" id="revYear">—</div>
+            <div class="rev-box-sub" id="revYearSub"></div>
+          </div>
+        </div>
+        <p style="font-size:10px;color:var(--tx3);margin-top:.5rem">※指導管理料・自費・材料費は含みません。</p>
+      </div>
+
+      <div class="ref-card">
+        <div class="ref-header">参考：指導管理料（合計には含まれていません）</div>
+        <div class="ref-note">実質的な収益は機器費用・材料費との差引きになるため参考値として表示しています。</div>
+        <div class="ref-row"><label><input type="checkbox" id="r_oxygen" onchange="calc()">在宅酸素療法指導管理料（その他）</label><span class="ref-pts">2,400点 / 24,000円</span></div>
+        <div class="ref-row"><label><input type="checkbox" id="r_cpap" onchange="calc()">在宅持続陽圧呼吸療法指導管理料2</label><span class="ref-pts">240点 / 2,400円</span></div>
+        <div class="ref-row"><label><input type="checkbox" id="r_inject" onchange="calc()">在宅自己注射指導管理料（月27回以下）</label><span class="ref-pts">650点 / 6,500円</span></div>
+        <div class="ref-row"><label><input type="checkbox" id="r_ivh" onchange="calc()">在宅中心静脈栄養法指導管理料</label><span class="ref-pts">3,000点 / 30,000円</span></div>
+        <div class="ref-row"><label><input type="checkbox" id="r_tumor" onchange="calc()">在宅悪性腫瘍等患者指導管理料</label><span class="ref-pts">1,500点 / 15,000円</span></div>
+        <div class="ref-row"><label><input type="checkbox" id="r_bedrest" onchange="calc()">在宅寝たきり患者処置指導管理料</label><span class="ref-pts">1,050点 / 10,500円</span></div>
+        <div class="ref-row" style="font-weight:600;background:var(--bg)">
+          <span>指導管理料 合計（参考）</span><span class="ref-pts" id="refTotalVal">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 令和8年（2026年）診療報酬改定 点数テーブル
+// インデックス: [1人, 2-9人, 10-19人, 20-49人, 50人以上]
+// ============================================================
+
+// 在宅時医学総合管理料（C002）
+// kino_a = 機能強化型・病床あり（単独型イ等）
+// kino_b = 機能強化型・病床なし（連携型等）
+// ippan  = 一般型在支診
+// other  = 在支診以外
+const SOUZANKAN_HOME = {
+  heavy:  { // 重症・月2回以上
+    kino_a: [5385, 4485, 2865, 2400, 2110],
+    kino_b: [4985, 4125, 2625, 2205, 1935],
+    ippan:  [4585, 3765, 2385, 2010, 1765],
+    other:  [3685, 1985,  985,  875,  745]
+  },
+  two:    { // 一般・月2回以上
+    kino_a: [4485, 2385, 1185, 1065,  905],
+    kino_b: [4085, 2185, 1085,  970,  825],
+    ippan:  [3685, 1985,  985,  875,  745],
+    other:  [2685,  985,  585,  515,    0]
+  },
+  two_ol: { // 月2回＋1回オンライン
+    kino_a: [3014, 1670,  865,  780,  660],
+    kino_b: [2774, 1550,  805,  720,  611],
+    ippan:  [2554, 1450,  765,  679,  578],
+    other:  [1894, 1090,  765,  679,  578]
+  },
+  one:    { // 月1回
+    kino_a: [2745, 1485,  765,  670,  575],
+    kino_b: [2505, 1365,  705,  615,  525],
+    ippan:  [2200, 1060,    0,    0,    0],
+    other:  [1500,  800,    0,    0,    0]
+  }
+};
+
+// 施設入居時等医学総合管理料（C002-2）
+const SOUZANKAN_FACI = {
+  heavy:  {
+    kino_a: [3885, 3225, 2865, 2400, 2110],
+    kino_b: [3585, 2955, 2625, 2205, 1935],
+    ippan:  [3285, 2685, 2385, 2010, 1765],
+    other:  [2585, 1385,  985,  875,  745]
+  },
+  two:    {
+    kino_a: [3185, 1685, 1185, 1065,  905],
+    kino_b: [2885, 1535, 1085,  970,  825],
+    ippan:  [2585, 1385,  985,  875,  745],
+    other:  [1985,  865,  585,  515,    0]
+  },
+  two_ol: {
+    kino_a: [2234, 1250,  865,  780,  660],
+    kino_b: [2054, 1160,  805,  720,  611],
+    ippan:  [1894, 1090,  765,  679,  578],
+    other:  [1494,  890,  565,  499,  424]
+  },
+  one:    {
+    kino_a: [1965, 1065,  765,  670,  575],
+    kino_b: [1785,  975,  705,  615,  525],
+    ippan:  [1625,  905,  665,  570,  490],
+    other:  [ 940,  538,    0,    0,    0]
+  }
+};
+
+// 在宅医療充実体制加算（在総管・施設総管）
+const JUJITSU_HOME = {
+  kino_a: [800, 400, 200, 170, 150],
+  kino_b: [800, 400, 200, 170, 150],
+  ippan:  [  0,   0,   0,   0,   0],
+  other:  [  0,   0,   0,   0,   0]
+};
+const JUJITSU_FACI = {
+  kino_a: [600, 300, 150, 126, 112],
+  kino_b: [600, 300, 150, 126, 112],
+  ippan:  [  0,   0,   0,   0,   0],
+  other:  [  0,   0,   0,   0,   0]
+};
+
+const BUILD_IDX = {'1':0,'2_9':1,'10_19':2,'20_49':3,'50':4};
+let currentUnitYen = 0;
+
+function fmt(n){return n.toLocaleString('ja-JP');}
+function fmtY(n){
+  if(n>=100000000) return (n/100000000).toFixed(1)+'億円';
+  if(n>=10000)     return Math.round(n/10000)+'万円';
+  return fmt(n)+'円';
+}
+function fmtYSub(n){
+  if(n>=100000000){
+    const man=Math.round((n%100000000)/10000);
+    return man>0?`（${Math.floor(n/100000000)}億${fmt(man)}万円）`:'';
+  }
+  return '';
+}
+function updateSliderFill(el){
+  el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100).toFixed(1)+'%');
+}
+function onSlider(el){
+  updateSliderFill(el);
+  const v=parseInt(el.value);
+  document.getElementById('ptNumDisp').textContent=v;
+  document.getElementById('ptManual').value=v;
+  updateRevenue(v);
+}
+function onManual(el){
+  let v=parseInt(el.value)||0;
+  if(v<0)v=0;
+  document.getElementById('ptNumDisp').textContent=v;
+  const slider=document.getElementById('ptSlider');
+  slider.value=Math.min(v,500);
+  updateSliderFill(slider);
+  updateRevenue(v);
+}
+function updateRevenue(pts){
+  if(currentUnitYen===0||pts===0){
+    document.getElementById('revMonth').textContent=pts===0?'0円':'—';
+    document.getElementById('revMonthSub').textContent='';
+    document.getElementById('revYear').textContent=pts===0?'0円':'—';
+    document.getElementById('revYearSub').textContent='';
+    return;
+  }
+  const monthly=currentUnitYen*pts, yearly=monthly*12;
+  document.getElementById('revMonth').textContent=fmtY(monthly);
+  document.getElementById('revMonthSub').textContent=pts+'人 × '+fmt(currentUnitYen)+'円';
+  document.getElementById('revYear').textContent=fmtY(yearly);
+  document.getElementById('revYearSub').textContent=fmtYSub(yearly)||'月間×12か月';
+}
+
+function calc(){
+  const kino  = document.getElementById('kinoType').value;
+  const res   = document.getElementById('residence').value;
+  const build = document.getElementById('building').value;
+  const visit = document.getElementById('visits').value;
+  const sbld  = document.getElementById('sameBuilding').value;
+  const vcnt  = parseInt(document.getElementById('visitCount').value);
+
+  const onJujitsu = document.getElementById('jujitsu').checked;
+  const onHokatsu = document.getElementById('hokatsu').checked;
+  const onIko     = document.getElementById('iko').checked;
+  const onIct     = document.getElementById('ict').checked;
+  const onKyotaku = document.getElementById('kyotaku').checked;
+  const onBase    = document.getElementById('base').checked;
+  const onBukka   = document.getElementById('bukka').checked;
+
+  const bIdx   = BUILD_IDX[build];
+  const isHome = res==='home';
+  const tbl    = isHome ? SOUZANKAN_HOME : SOUZANKAN_FACI;
+  const jTbl   = isHome ? JUJITSU_HOME   : JUJITSU_FACI;
+
+  // ---- 診療報酬 ----
+  const souzanPts  = (tbl[visit]?.[kino]?.[bIdx]) || 0;
+  const visitFee   = sbld==='other' ? 888 : 213;
+  const visitTotal = visitFee * vcnt;
+  const basePts    = onBase    ? (sbld==='other' ? 107 : 26) * vcnt : 0;
+  const bukPts     = onBukka   ? 3 * vcnt : 0;
+  const jujitsuPts = onJujitsu ? (jTbl[kino][bIdx]||0) : 0;
+  const hokatsuPts = onHokatsu ? 150 : 0;
+  const ikoPts     = onIko     ? 100 : 0;
+  const ictPts     = onIct     ? 100 : 0;
+
+  const iryoTotal = souzanPts + jujitsuPts + hokatsuPts + ikoPts + ictPts + visitTotal + basePts + bukPts;
+  const iryoYen   = iryoTotal * 10;
+
+  // ---- 介護報酬：居宅療養管理指導（Ⅱ）×2回 ×11.4円 ----
+  const kyotakuUnits = bIdx===0 ? 299 : bIdx===1 ? 287 : 260;
+  const kyotakuYen   = onKyotaku ? Math.round(kyotakuUnits * 2 * 11.4) : 0;
+
+  const totalYen = iryoYen + kyotakuYen;
+  currentUnitYen = totalYen;
+
+  // ---- ヘッダー ----
+  document.getElementById('totalYen').textContent = fmt(totalYen)+'円';
+  document.getElementById('totalPts').textContent =
+    fmt(iryoTotal)+' 点（診療報酬）'+(onKyotaku?`　＋　${fmt(kyotakuUnits*2)}単位（介護）`:'');
+  document.getElementById('iryoYen').textContent  = fmt(iryoYen)+'円';
+  document.getElementById('kaigoYen').textContent = onKyotaku ? fmt(kyotakuYen)+'円' : 'OFF';
+  document.getElementById('kaigoBadge').style.opacity = onKyotaku ? '1' : '0.45';
+
+  // ---- 内訳 ----
+  const visitLabel = {heavy:'重症・月2回以上', two:'一般・月2回', two_ol:'月2回＋1回オンライン', one:'月1回'};
+  const rows = [
+    {section:'在総管・施設総管'},
+    {label:`${isHome?'在総管':'施設総管'}（${visitLabel[visit]}）`, pts:souzanPts, yen:souzanPts*10},
+    ...(onJujitsu&&jujitsuPts>0?[{label:'在宅医療充実体制加算', pts:jujitsuPts, yen:jujitsuPts*10}]:[]),
+    ...(onHokatsu?[{label:'包括的支援加算', pts:150, yen:1500}]:[]),
+    ...(onIko?    [{label:'在宅移行早期加算', pts:100, yen:1000}]:[]),
+    ...(onIct?    [{label:'在宅医療情報連携加算', pts:100, yen:1000}]:[]),
+    {section:'訪問診療料'},
+    {label:`訪問診療料（${sbld==='other'?'同一建物以外':'同一建物内'}）×${vcnt}回`, pts:visitTotal, yen:visitTotal*10},
+    {section:'物価・賃上げ'},
+    ...(onBase? [{label:`ベースアップ評価料×${vcnt}回`, pts:basePts, yen:basePts*10}]:[]),
+    ...(onBukka?[{label:`物価対応料×${vcnt}回`, pts:bukPts, yen:bukPts*10}]:[]),
+    {subIryo:true, label:'診療報酬 小計', pts:iryoTotal, yen:iryoYen},
+    ...(onKyotaku?[
+      {section:'介護報酬（1単位11.4円換算）'},
+      {kaigo:true, label:`居宅療養管理指導（Ⅱ）×2回　${kyotakuUnits}単位×2`, yen:kyotakuYen},
+      {subKaigo:true, label:'介護報酬 小計', yen:kyotakuYen},
+    ]:[]),
+    {grandTotal:true, label:'合算合計', yen:totalYen},
+  ];
+
+  let html='';
+  rows.forEach(r=>{
+    if(r.section){
+      html+=`<div class="bk-row section">${r.section}</div>`;
+    } else if(r.grandTotal){
+      html+=`<div class="bk-row grand-total"><span>${r.label}</span><span>${fmt(r.yen)}円</span></div>`;
+    } else if(r.subIryo){
+      html+=`<div class="bk-row sub-iryo"><span>${r.label}</span><span>${fmt(r.pts)}点　${fmt(r.yen)}円</span></div>`;
+    } else if(r.subKaigo){
+      html+=`<div class="bk-row sub-kaigo"><span>${r.label}</span><span>${fmt(r.yen)}円</span></div>`;
+    } else if(r.kaigo){
+      html+=`<div class="bk-row"><span>${r.label}</span><div class="bk-pts"><strong>${fmt(r.yen)}</strong>円<div class="bk-yen">1単位11.4円換算</div></div></div>`;
+    } else {
+      html+=`<div class="bk-row"><span>${r.label}</span><div class="bk-pts"><strong>${r.pts>0?fmt(r.pts):'—'}</strong>点<div class="bk-yen">${r.pts>0?fmt(r.yen)+'円':'算定不可'}</div></div></div>`;
+    }
+  });
+  document.getElementById('breakdown').innerHTML=html;
+
+  // ---- 注記 ----
+  const notes=[];
+  if(souzanPts===0) notes.push('選択した条件では在総管・施設総管を算定できません（訪問区分・建物区分・医療機関種別の組み合わせを確認してください）。');
+  if(visit==='heavy'&&(kino==='ippan'||kino==='other')) notes.push('重症患者区分は機能強化型で最も高い点数が設定されています。種別をご確認ください。');
+  const nb=document.getElementById('noteBox');
+  if(notes.length){nb.style.display='block';nb.innerHTML=notes.map(n=>`▲ ${n}`).join('<br>');}
+  else{nb.style.display='none';}
+
+  // ---- 指導管理料参考 ----
+  const refMap={r_oxygen:2400,r_cpap:240,r_inject:650,r_ivh:3000,r_tumor:1500,r_bedrest:1050};
+  let refTotal=0;
+  Object.keys(refMap).forEach(id=>{if(document.getElementById(id).checked)refTotal+=refMap[id];});
+  document.getElementById('refTotalVal').textContent=refTotal>0?fmt(refTotal*10)+'円':'—';
+
+  updateRevenue(parseInt(document.getElementById('ptManual').value)||0);
+}
+
+calc();
+updateSliderFill(document.getElementById('ptSlider'));
+</script>
+</body>
+</html>
