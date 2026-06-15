@@ -693,6 +693,13 @@
         <option value="09">9月</option><option value="10">10月</option>
         <option value="11">11月</option><option value="12">12月</option>
       </select>月</div>
+    <div class="filter-sep"></div>
+    <span class="filter-label">拠点</span>
+    <select id="cmpLocation">
+      <option value="all">全拠点</option>
+      <option>芝浦拠点</option>
+      <option>城東拠点</option>
+    </select>
     <button class="btn btn-primary" onclick="buildCompare()">比較する</button>
   </div>
 
@@ -1236,9 +1243,20 @@ function buildCompare(){
   if(fromA>toA||fromB>toB){ showToast('開始月は終了月より前にしてください','error'); return; }
 
   const today = new Date().toISOString().slice(0,10);
+  const cmpLoc = document.getElementById('cmpLocation')?.value || 'all';
 
-  const dataA = allData.filter(d=>{ const ym=d.date.slice(0,7); return ym>=fromA&&ym<=toA; });
-  const dataB = allData.filter(d=>{ const ym=d.date.slice(0,7); return ym>=fromB&&ym<=toB; });
+  const dataA = allData.filter(d=>{
+    const ym=d.date.slice(0,7);
+    if(ym<fromA||ym>toA) return false;
+    if(cmpLoc!=='all'&&d.location!==cmpLoc) return false;
+    return true;
+  });
+  const dataB = allData.filter(d=>{
+    const ym=d.date.slice(0,7);
+    if(ym<fromB||ym>toB) return false;
+    if(cmpLoc!=='all'&&d.location!==cmpLoc) return false;
+    return true;
+  });
 
   // 事業所別集計
   const mapA = {}, mapB = {};
