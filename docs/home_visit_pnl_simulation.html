@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>訪問診療 損益分岐シミュレーション v5</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f5f7fa;--surface:#ffffff;--surface2:#f0f2f6;--border:#d4d8e2;
+  --text:#1a1d27;--text-dim:#4a5568;
+  --accent:#0077b6;--accent2:#0096c7;
+  --green:#1a7f37;--red:#c0392b;--orange:#b45309;
+  --purple:#6d28d9;--teal:#0f766e;--yellow:#92400e;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;line-height:1.7;min-height:100vh}
+.container{max-width:1700px;margin:0 auto;padding:24px 20px}
+
+header{text-align:center;margin-bottom:28px}
+header::after{content:'';display:block;width:80px;height:3px;background:linear-gradient(90deg,var(--accent),var(--purple));margin:10px auto 0;border-radius:2px}
+header h1{font-size:22px;font-weight:900;color:var(--accent);-webkit-text-fill-color:var(--accent)}
+header p{font-size:11px;color:var(--text-dim);margin-top:4px}
+
+/* Panels */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px}
+.ph2{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.ph3{font-size:11px;font-weight:700;padding:5px 10px;border-radius:5px;margin:12px 0 7px;display:flex;align-items:center;gap:5px}
+
+/* Tabs */
+.tab-bar{display:flex;gap:2px;flex-wrap:wrap;border-bottom:2px solid var(--border);margin-bottom:14px}
+.tb{background:none;border:none;color:var(--text-dim);font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:500;padding:7px 13px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tb:hover{color:var(--text)}
+.tb.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+.tc{display:none}.tc.on{display:block}
+
+/* Staff table */
+.staff-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
+.staff-tbl th{background:var(--surface2);padding:6px 10px;text-align:left;font-weight:700;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border)}
+.staff-tbl th.r{text-align:right}
+.staff-tbl td{padding:5px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.staff-tbl td.r{text-align:right}
+.staff-tbl tr:last-child td{border-bottom:none}
+.staff-tbl .role-name{font-weight:600;color:var(--text);font-size:12px}
+.staff-tbl .role-tag{font-size:9px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;color:var(--text-dim);margin-left:4px}
+.staff-tbl .computed{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim)}
+
+/* Inputs */
+.inp{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;padding:3px 7px;text-align:right;outline:none;width:86px}
+.inp:focus{border-color:var(--accent)}
+.inp.sm{width:60px}
+.inp.wide{width:110px}
+.inp.name{text-align:left;font-family:'Noto Sans JP',sans-serif;font-weight:500;width:100px}
+
+/* Param grid */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:7px;margin-bottom:8px}
+.pi{display:flex;justify-content:space-between;align-items:center;background:var(--surface2);padding:6px 11px;border-radius:6px;font-size:12px}
+.pi .pl{color:var(--text-dim);flex:1}
+.pi .pu{color:var(--text-dim);font-size:10px;margin-left:3px}
+
+/* Flex rows */
+.frow{display:flex;align-items:center;gap:7px;background:var(--surface2);padding:6px 11px;border-radius:6px;font-size:12px;margin-bottom:5px;flex-wrap:wrap}
+.frow .fl{color:var(--text-dim);font-size:11px;white-space:nowrap}
+.frow .fu{color:var(--text-dim);font-size:10px}
+.frow select{background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:11px;padding:3px 6px;outline:none}
+
+.btn-sm{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:4px;padding:3px 9px;cursor:pointer;font-size:11px;font-family:'Noto Sans JP',sans-serif;transition:all .2s}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm.add{color:var(--green);border-color:rgba(26,127,55,.3)}
+
+/* Site result tabs */
+.rtabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.rtab{padding:8px 16px;border-radius:7px;border:2px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;font-weight:700;text-align:center;min-width:100px;transition:all .2s}
+.rtab:hover{border-color:var(--text-dim)}
+.rtab.on{border-color:var(--accent);background:var(--surface2)}
+.rtab.total{border-color:rgba(180,83,9,.35)}
+.rtab.total.on{border-color:var(--orange);background:rgba(180,83,9,.07)}
+.rtab .rs{font-size:9px;font-weight:400;color:var(--text-dim);margin-top:1px}
+
+/* Output tables */
+.twrap{overflow-x:auto;margin-bottom:20px;border-radius:10px;border:1px solid var(--border)}
+table.out{width:100%;border-collapse:collapse;font-size:12px;min-width:420px}
+table.out thead th{background:var(--surface);padding:9px 12px;text-align:right;font-weight:700;font-size:11px;color:var(--text-dim);border-bottom:2px solid var(--border);white-space:nowrap;position:sticky;top:0}
+table.out thead th:first-child{text-align:left;min-width:210px}
+table.out tbody td{padding:7px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;border-bottom:1px solid var(--border);white-space:nowrap}
+table.out tbody td:first-child{text-align:left;font-family:'Noto Sans JP',sans-serif;font-weight:500;color:var(--text);font-size:12px}
+table.out tbody tr:hover{background:rgba(0,119,182,.04)}
+table.out tr.sub td{border-top:2px solid var(--border);font-weight:700;background:var(--surface)}
+table.out tr.profit td{border-top:2px solid var(--accent);font-weight:900;font-size:13px}
+table.out tr.bep td{color:var(--orange);font-weight:700;background:rgba(180,83,9,.05)}
+table.out tr.cat td{font-weight:700;color:var(--accent);font-size:11px;padding-top:11px;background:rgba(0,119,182,.06);font-family:'Noto Sans JP',sans-serif}
+
+/* SI table */
+.si-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);margin-top:10px}
+.si-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:680px}
+.si-tbl th{background:var(--surface2);padding:7px 9px;text-align:right;font-weight:700;font-size:10px;color:var(--text-dim);border-bottom:2px solid var(--border);white-space:nowrap}
+.si-tbl th:first-child{text-align:left}
+.si-tbl td{padding:6px 9px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.si-tbl td:first-child{text-align:left;font-family:'Noto Sans JP',sans-serif;font-weight:500}
+.si-tbl tr.si-tot td{font-weight:700;border-top:2px solid var(--accent);background:var(--surface);font-size:11px}
+
+/* Summary */
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px;margin-bottom:20px}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.scard .sl{font-size:10px;color:var(--text-dim);margin-bottom:3px}
+.scard .sv{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700}
+.scard .ss{font-size:9px;color:var(--text-dim);margin-top:2px}
+.scard.g .sv{color:var(--green)}.scard.r .sv{color:var(--red)}
+
+/* Big banner */
+.banner{background:linear-gradient(135deg,rgba(180,83,9,.07),rgba(109,40,217,.06));border:2px solid var(--orange);border-radius:12px;padding:18px;text-align:center;margin-bottom:20px}
+.banner .bn{font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:900;margin:5px 0}
+.banner .bs{font-size:11px;color:var(--text-dim)}
+
+.stitle{font-size:14px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:6px}
+.note{font-size:10px;color:var(--text-dim);line-height:1.7;margin-top:6px}
+.ibox{background:rgba(0,119,182,.07);border:1px solid rgba(0,119,182,.2);border-radius:7px;padding:9px 13px;font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.7}
+.ibox strong{color:var(--accent)}
+
+.update-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#ffffff;border:none;padding:8px 22px;border-radius:7px;font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:700;cursor:pointer}
+.update-btn:hover{opacity:.85}
+
+.badge{display:inline-block;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;margin-left:3px}
+.badge.ext{background:rgba(146,64,14,.08);border:1px solid rgba(146,64,14,.25);color:var(--yellow)}
+.badge.si{background:rgba(180,83,9,.08);border:1px solid rgba(180,83,9,.25);color:var(--orange)}
+
+/* ── シナリオ管理 ── */
+.scn-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.scn-name-inp{background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:500;padding:5px 10px;outline:none;width:200px}
+.scn-name-inp:focus{border-color:var(--accent)}
+.scn-btn{border:none;border-radius:6px;padding:6px 14px;font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s}
+.scn-btn.save{background:var(--accent);color:#fff}
+.scn-btn.save:hover{opacity:.85}
+.scn-btn.export{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim)}
+.scn-btn.export:hover{border-color:var(--accent);color:var(--accent)}
+.scn-btn.import{background:var(--surface2);border:1px solid var(--border);color:var(--text-dim)}
+.scn-btn.import:hover{border-color:var(--teal);color:var(--teal)}
+.scn-list{display:flex;flex-direction:column;gap:6px}
+.scn-item{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;transition:all .2s}
+.scn-item:hover{border-color:var(--accent)}
+.scn-item.compare-a{border-color:var(--accent);background:rgba(0,119,182,.05)}
+.scn-item.compare-b{border-color:var(--purple);background:rgba(109,40,217,.05)}
+.scn-item-name{font-weight:700;font-size:13px;flex:1}
+.scn-item-meta{font-size:10px;color:var(--text-dim)}
+.scn-item-btns{display:flex;gap:5px;flex-shrink:0}
+.scn-ibtn{border:1px solid var(--border);background:none;border-radius:4px;padding:2px 8px;font-size:11px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;transition:all .2s;color:var(--text-dim)}
+.scn-ibtn:hover{color:var(--text);border-color:var(--text-dim)}
+.scn-ibtn.load{color:var(--accent);border-color:rgba(0,119,182,.4)}
+.scn-ibtn.cmp-a{color:var(--accent);border-color:rgba(0,119,182,.4)}
+.scn-ibtn.cmp-b{color:var(--purple);border-color:rgba(109,40,217,.4)}
+.scn-ibtn.del{color:var(--red);border-color:rgba(192,57,43,.3)}
+.scn-empty{font-size:12px;color:var(--text-dim);padding:10px 0}
+
+/* 比較ビュー */
+.cmp-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.cmp-col{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:16px}
+.cmp-col.a{border-color:var(--accent)}
+.cmp-col.b{border-color:var(--purple)}
+.cmp-col-title{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.cmp-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.cmp-tbl td{padding:5px 8px;border-bottom:1px solid var(--border)}
+.cmp-tbl td:last-child{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700}
+.cmp-tbl tr.cmp-cat td{font-weight:700;color:var(--accent);font-size:11px;padding-top:10px;background:rgba(0,119,182,.03)}
+.cmp-tbl tr.cmp-profit td{border-top:2px solid var(--border);font-weight:900}
+.cmp-diff{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px}
+.cmp-diff-title{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)}
+.diff-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.diff-tbl th{background:var(--surface2);padding:6px 10px;text-align:right;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border)}
+.diff-tbl th:first-child{text-align:left}
+.diff-tbl td{padding:6px 10px;border-bottom:1px solid var(--border);text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px}
+.diff-tbl td:first-child{text-align:left;font-family:'Noto Sans JP',sans-serif;font-weight:500}
+.diff-tbl tr:hover{background:rgba(0,119,182,.03)}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <h1>訪問診療 損益分岐シミュレーション</h1>
+  <p>3拠点 ── 人員・コスト自由入力・常勤/非常勤分離・社保自動計算・法人連結P/L</p>
+</header>
+
+<!-- シナリオ管理 -->
+<div class="panel" id="scnPanel">
+  <div class="ph2">💾 シナリオ管理</div>
+  <div class="scn-bar">
+    <input class="scn-name-inp" id="scnNameInp" placeholder="シナリオ名を入力（例：楽観シナリオ）" maxlength="40">
+    <button class="scn-btn save" onclick="saveScenario()">💾 現在の設定を保存</button>
+    <button class="scn-btn export" onclick="exportJSON()">📤 JSONエクスポート</button>
+    <label class="scn-btn import" style="cursor:pointer">
+      📥 JSONインポート
+      <input type="file" accept=".json" onchange="importJSON(event)" style="display:none">
+    </label>
+  </div>
+  <div class="scn-list" id="scnList"></div>
+
+  <!-- 比較ビュー -->
+  <div id="scnCompare" style="display:none;margin-top:16px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text)">📊 シナリオ比較</div>
+    <div id="scnCmpContent"></div>
+  </div>
+</div>
+
+<!-- 社会保険料率 共通 -->
+<div class="panel">
+  <div class="ph2">⚙ 社会保険料率（共通）</div>
+  <div class="pgrid" id="gridSI"></div>
+  <div class="note">※ 協会けんぽ東京支部想定（介護込み会社負担分）。厚年は標準報酬月額上限でキャップ。非常勤医師は外注扱いのため社保対象外。</div>
+</div>
+
+<!-- 本部費用 -->
+<div class="panel">
+  <div class="ph2">🏛 本部費用（法人全体）</div>
+  <div class="ph3" style="color:var(--purple);background:rgba(109,40,217,.06)">理事報酬</div>
+  <div id="dirList"></div>
+  <button class="btn-sm add" onclick="addDir()" style="margin-top:6px">＋ 理事を追加</button>
+  <div class="note" style="margin-top:6px">※ 連結P/Lに反映。各拠点P/Lには含まれません。</div>
+</div>
+
+<!-- 拠点設定 -->
+<div class="panel">
+  <div class="ph2">🏥 拠点別設定</div>
+  <div class="tab-bar" id="siteTabs">
+    <button class="tb on" data-tc="sc0">拠点A</button>
+    <button class="tb" data-tc="sc1">拠点B</button>
+    <button class="tb" data-tc="sc2">拠点C</button>
+  </div>
+  <div id="sc0" class="tc on"></div>
+  <div id="sc1" class="tc"></div>
+  <div id="sc2" class="tc"></div>
+</div>
+
+<div style="text-align:center;margin-bottom:24px">
+  <button class="update-btn" onclick="renderAll()">🔄 全拠点再計算</button>
+</div>
+
+<!-- SI breakdown -->
+<div class="panel">
+  <div class="ph2">📋 社会保険料 内訳（会社負担 / 1名あたり月額）</div>
+  <div id="siOut"></div>
+</div>
+
+<!-- Results -->
+<div class="rtabs" id="rtabs"></div>
+<div id="rout"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// GLOBAL SI RATES
+// ══════════════════════════════════════
+const SI = {
+  healthIns:5.985, pension:9.15, pensionCap:650000,
+  employIns:0.95, accidentIns:0.3, childCare:0.36,
+};
+const siParams = [
+  {k:'healthIns',  l:'健康保険（介護込み・会社負担）', u:'%'},
+  {k:'pension',    l:'厚生年金（会社負担）',            u:'%'},
+  {k:'pensionCap', l:'厚年 標準報酬月額上限',           u:'円'},
+  {k:'employIns',  l:'雇用保険（事業主負担）',          u:'%'},
+  {k:'accidentIns',l:'労災保険',                        u:'%'},
+  {k:'childCare',  l:'子ども子育て拠出金',              u:'%'},
+];
+
+// ══════════════════════════════════════
+// SITE DATA MODEL
+// ══════════════════════════════════════
+// staff roles: { id, label, count, salary, hasSI, isFixed }
+// ptDr: { komaPrice, komaPerMonth }  — 非常勤医師
+// costs: { officeRent, nightShift, carCount, carLease, systemCost, insurance, supplies, otherFixed, fuelPerDr, consumablePerPt }
+
+function newSite(name, presets) {
+  return {
+    name,
+    unitPrice: 75000,
+    patients: 80,
+    // 常勤スタッフ（人数・月給それぞれ入力）
+    staff: [
+      { id:'dr5', label:'常勤医師（週5日）', count:1, salary:2000000, hasSI:true },
+      { id:'dr4', label:'常勤医師（週4日）', count:0, salary:1670000, hasSI:true },
+      { id:'dr3', label:'常勤医師（週3日）', count:0, salary:1200000, hasSI:true },
+      { id:'nurse', label:'同行者',     count:1, salary:350000,  hasSI:true },
+      { id:'drv',   label:'ドライバー', count:1, salary:250000,  hasSI:true },
+      { id:'jcho',  label:'事務長',     count:1, salary:900000,  hasSI:true },
+      { id:'sdn',   label:'相談員',     count:1, salary:400000,  hasSI:true },
+      { id:'jimu',  label:'事務員',     count:1, salary:280000,  hasSI:true },
+    ],
+    // 非常勤医師（コマ制・外注）
+    ptDr: { komaPrice:50000, komaPerMonth:0 },
+    // 固定費（拠点個別）
+    costs: {
+      officeRent:300000,
+      nightShift:0,
+      carCount:2, carLease:80000,
+      systemCost:150000,
+      insurance:100000,
+      supplies:200000,
+      otherFixed:100000,
+      fuelPerDr:40000,       // 常勤医師1人あたり燃料費
+      consumablePerPt:500,
+    },
+    ...presets,
+  };
+}
+
+let sites = [
+  newSite('拠点A', {}),
+  newSite('拠点B', { patients:60, staff: [
+    {id:'dr5',label:'常勤医師（週5日）',count:1,salary:2000000,hasSI:true},
+    {id:'dr4',label:'常勤医師（週4日）',count:0,salary:1670000,hasSI:true},
+    {id:'dr3',label:'常勤医師（週3日）',count:0,salary:1200000,hasSI:true},
+    {id:'nurse',label:'同行者',count:1,salary:350000,hasSI:true},
+    {id:'drv',label:'ドライバー',count:1,salary:250000,hasSI:true},
+    {id:'jcho',label:'事務長',count:0,salary:900000,hasSI:true},
+    {id:'sdn',label:'相談員',count:1,salary:400000,hasSI:true},
+    {id:'jimu',label:'事務員',count:1,salary:280000,hasSI:true},
+  ], costs:{officeRent:200000,nightShift:0,carCount:1,carLease:80000,systemCost:100000,insurance:80000,supplies:150000,otherFixed:80000,fuelPerDr:40000,consumablePerPt:500} }),
+  newSite('拠点C', { patients:40, staff: [
+    {id:'dr5',label:'常勤医師（週5日）',count:0,salary:2000000,hasSI:true},
+    {id:'dr4',label:'常勤医師（週4日）',count:0,salary:1670000,hasSI:true},
+    {id:'dr3',label:'常勤医師（週3日）',count:0,salary:1200000,hasSI:true},
+    {id:'nurse',label:'同行者',count:1,salary:350000,hasSI:true},
+    {id:'drv',label:'ドライバー',count:1,salary:250000,hasSI:true},
+    {id:'jcho',label:'事務長',count:0,salary:900000,hasSI:true},
+    {id:'sdn',label:'相談員',count:0,salary:400000,hasSI:true},
+    {id:'jimu',label:'事務員',count:1,salary:280000,hasSI:true},
+  ], ptDr:{komaPrice:50000,komaPerMonth:16}, costs:{officeRent:150000,nightShift:0,carCount:1,carLease:80000,systemCost:80000,insurance:60000,supplies:100000,otherFixed:60000,fuelPerDr:40000,consumablePerPt:500} }),
+];
+
+let directors = [{name:'理事1', salary:0, hasSI:false}];
+
+// ══════════════════════════════════════
+// TAB SWITCHING (generic)
+// ══════════════════════════════════════
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.tb');
+  if (!btn) return;
+  const bar = btn.closest('.tab-bar');
+  if (!bar) return;
+  bar.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  const panel = bar.parentElement;
+  panel.querySelectorAll(':scope > .tc').forEach(c => c.classList.remove('on'));
+  const tc = panel.querySelector('#' + btn.dataset.tc);
+  if (tc) tc.classList.add('on');
+});
+
+// ══════════════════════════════════════
+// SI PARAMS BUILD
+// ══════════════════════════════════════
+function buildSIGrid() {
+  const g = document.getElementById('gridSI');
+  g.innerHTML = '';
+  siParams.forEach(d => {
+    const isP = d.u === '%';
+    const val = isP ? SI[d.k] : SI[d.k].toLocaleString();
+    const fob = isP ? '' : `onfocus="this.value=this.value.replace(/,/g,'')" onblur="this.value=Number(this.value).toLocaleString()"`;
+    const div = document.createElement('div');
+    div.className = 'pi';
+    div.innerHTML = `<span class="pl">${d.l}</span>
+      <input class="inp sm" id="si_${d.k}" value="${val}" ${fob}>
+      <span class="pu">${d.u}</span>`;
+    g.appendChild(div);
+  });
+}
+function readSI() {
+  siParams.forEach(d => {
+    const el = document.getElementById('si_' + d.k);
+    if (!el) return;
+    const v = d.u === '%' ? parseFloat(el.value) : parseInt(el.value.replace(/,/g,''), 10);
+    if (!isNaN(v)) SI[d.k] = v;
+  });
+}
+
+// ══════════════════════════════════════
+// DIRECTORS
+// ══════════════════════════════════════
+function renderDirs() {
+  const c = document.getElementById('dirList');
+  c.innerHTML = '';
+  directors.forEach((d, i) => {
+    const row = document.createElement('div');
+    row.className = 'frow';
+    row.innerHTML = `
+      <span class="fl">名称</span>
+      <input class="inp name" id="dn_${i}" value="${d.name}">
+      <span class="fl">月額報酬</span>
+      <input class="inp" id="ds_${i}" value="${d.salary.toLocaleString()}"
+        onfocus="this.value=this.value.replace(/,/g,'')" onblur="this.value=Number(this.value).toLocaleString()">
+      <span class="fu">円</span>
+      <span class="fl">社保</span>
+      <select id="dsi_${i}">
+        <option value="0" ${!d.hasSI?'selected':''}>なし</option>
+        <option value="1" ${d.hasSI?'selected':''}>あり</option>
+      </select>
+      <button class="btn-sm" style="color:var(--red);border-color:rgba(192,57,43,.25)" onclick="removeDir(${i})">✕</button>`;
+    c.appendChild(row);
+  });
+}
+function addDir() {
+  directors.push({name:'理事'+(directors.length+1), salary:0, hasSI:false});
+  renderDirs();
+}
+function removeDir(i) {
+  if (directors.length <= 1) return;
+  directors.splice(i, 1); renderDirs();
+}
+function readDirs() {
+  directors.forEach((d, i) => {
+    const n=document.getElementById('dn_'+i), s=document.getElementById('ds_'+i), si=document.getElementById('dsi_'+i);
+    if(n) d.name=n.value;
+    if(s){const v=parseInt(s.value.replace(/,/g,''),10);if(!isNaN(v))d.salary=v;}
+    if(si) d.hasSI=si.value==='1';
+  });
+}
+
+// ══════════════════════════════════════
+// SITE CONFIG UI
+// ══════════════════════════════════════
+const costDefs = [
+  {k:'officeRent', l:'事務所賃料（月額）',        u:'円', color:'var(--teal)'},
+  {k:'nightShift', l:'夜間当直 外注費（月額）',   u:'円', color:'var(--purple)'},
+  {k:'carCount',   l:'車両台数',                  u:'台', color:''},
+  {k:'carLease',   l:'車両リース（1台あたり/月）', u:'円', color:''},
+  {k:'systemCost', l:'電子カルテ・システム',       u:'円', color:''},
+  {k:'insurance',  l:'保険・諸会費',              u:'円', color:''},
+  {k:'supplies',   l:'材料・通信・消耗品等',       u:'円', color:''},
+  {k:'otherFixed', l:'その他雑費',                u:'円', color:''},
+  {k:'fuelPerDr',  l:'燃料費（常勤医師1人あたり）',u:'円', color:''},
+  {k:'consumablePerPt', l:'患者あたり消耗品',     u:'円', color:''},
+];
+
+function buildSiteUI() {
+  sites.forEach((s, si) => {
+    const el = document.getElementById('sc' + si);
+    el.innerHTML = '';
+
+    // 基本情報
+    const basic = document.createElement('div');
+    basic.className = 'pgrid';
+    basic.innerHTML = `
+      <div class="pi"><span class="pl">拠点名</span>
+        <input class="inp name" id="sname_${si}" value="${s.name}"><span class="pu"></span></div>
+      <div class="pi"><span class="pl">患者月額単価</span>
+        <input class="inp" id="sup_${si}" value="${s.unitPrice.toLocaleString()}"
+          onfocus="this.value=this.value.replace(/,/g,'')" onblur="this.value=Number(this.value).toLocaleString()">
+        <span class="pu">円</span></div>
+      <div class="pi"><span class="pl">患者数</span>
+        <input class="inp" id="spt_${si}" value="${s.patients}"><span class="pu">名</span></div>`;
+    el.appendChild(basic);
+
+    // 常勤スタッフ
+    const sh3 = document.createElement('div');
+    sh3.className = 'ph3';
+    sh3.style.cssText = 'color:var(--accent);background:rgba(0,119,182,.07)';
+    sh3.innerHTML = '👤 常勤スタッフ（社会保険込み）';
+    el.appendChild(sh3);
+
+    const tbl = document.createElement('table');
+    tbl.className = 'staff-tbl';
+    tbl.innerHTML = `<thead><tr>
+      <th>職種</th>
+      <th class="r">人数</th>
+      <th class="r">月給（額面）</th>
+      <th class="r">法定福利費/人</th>
+      <th class="r">月額小計（社保込）</th>
+    </tr></thead><tbody id="stbl_${si}"></tbody>`;
+    el.appendChild(tbl);
+
+    s.staff.forEach((st, ti) => {
+      const tr = document.createElement('tr');
+      const isDr = ['dr5','dr4','dr3'].includes(st.id);
+      if (isDr) tr.style.background = 'rgba(0,119,182,.04)';
+      tr.innerHTML = `
+        <td><span class="role-name">${st.label}</span><span class="role-tag">社保</span></td>
+        <td class="r"><input class="inp sm" id="sc_${si}_${ti}_cnt" value="${st.count}"></td>
+        <td class="r"><input class="inp" id="sc_${si}_${ti}_sal" value="${st.salary.toLocaleString()}"
+          onfocus="this.value=this.value.replace(/,/g,'')" onblur="this.value=Number(this.value).toLocaleString()"></td>
+        <td class="r computed" id="sc_${si}_${ti}_si">-</td>
+        <td class="r computed" id="sc_${si}_${ti}_tot">-</td>`;
+      document.getElementById('stbl_'+si)?.appendChild(tr);
+      el.querySelector('#stbl_'+si)?.appendChild(tr);
+    });
+
+    // 非常勤医師
+    const ph3pt = document.createElement('div');
+    ph3pt.className = 'ph3';
+    ph3pt.style.cssText = 'color:var(--yellow);background:rgba(146,64,14,.05)';
+    ph3pt.innerHTML = '🩺 非常勤医師 <span class="badge ext">外注・社保なし</span>';
+    el.appendChild(ph3pt);
+
+    const ptDiv = document.createElement('div');
+    ptDiv.className = 'pgrid';
+    ptDiv.innerHTML = `
+      <div class="pi"><span class="pl">1コマ単価（半日）</span>
+        <input class="inp" id="pt_${si}_price" value="${s.ptDr.komaPrice.toLocaleString()}"
+          onfocus="this.value=this.value.replace(/,/g,'')" onblur="this.value=Number(this.value).toLocaleString()">
+        <span class="pu">円</span></div>
+      <div class="pi"><span class="pl">月間コマ数</span>
+        <input class="inp" id="pt_${si}_koma" value="${s.ptDr.komaPerMonth}">
+        <span class="pu">コマ</span></div>`;
+    el.appendChild(ptDiv);
+
+    const ibox = document.createElement('div');
+    ibox.className = 'ibox';
+    ibox.innerHTML = `<strong>非常勤医師費用</strong> = 1コマ単価 × 月間コマ数（社保なし・外注費扱い）<br>
+      例：5万円/コマ × 16コマ = 80万円/月。常勤と独立して計算されます。`;
+    el.appendChild(ibox);
+
+    // 固定費・変動費
+    const ch3 = document.createElement('div');
+    ch3.className = 'ph3';
+    ch3.style.cssText = 'color:var(--orange);background:rgba(180,83,9,.06)';
+    ch3.innerHTML = '🏢 固定費・変動費';
+    el.appendChild(ch3);
+
+    const cg = document.createElement('div');
+    cg.className = 'pgrid';
+    costDefs.forEach(cd => {
+      const val = cd.k === 'carCount' ? s.costs[cd.k] : s.costs[cd.k].toLocaleString();
+      const fob = (cd.k !== 'carCount') ? `onfocus="this.value=this.value.replace(/,/g,'')" onblur="this.value=Number(this.value).toLocaleString()"` : '';
+      const style = cd.color ? `style="color:${cd.color}"` : '';
+      cg.innerHTML += `<div class="pi">
+        <span class="pl" ${style}>${cd.l}</span>
+        <input class="inp ${cd.k==='carCount'?'sm':''}" id="sc_${si}_${cd.k}" value="${val}" ${fob}>
+        <span class="pu">${cd.u}</span></div>`;
+    });
+    el.appendChild(cg);
+  });
+
+  // After building, update computed SI columns
+  updateStaffComputed();
+}
+
+function updateStaffComputed() {
+  sites.forEach((s, si) => {
+    s.staff.forEach((st, ti) => {
+      const siEl = document.getElementById(`sc_${si}_${ti}_si`);
+      const totEl = document.getElementById(`sc_${si}_${ti}_tot`);
+      if (!siEl || !totEl) return;
+      const siData = calcSI(st.salary);
+      const siCost = siData.total;
+      const total = (st.salary + siCost) * st.count;
+      siEl.textContent = yen(siCost) + '/人';
+      totEl.textContent = yen(total);
+    });
+  });
+}
+
+function readSiteConfigs() {
+  sites.forEach((s, si) => {
+    const r = id => document.getElementById(id);
+    const sn = r('sname_'+si); if(sn) s.name = sn.value;
+    const up = r('sup_'+si);   if(up){const v=parseInt(up.value.replace(/,/g,''),10);if(!isNaN(v))s.unitPrice=v;}
+    const pt = r('spt_'+si);   if(pt){const v=parseInt(pt.value.replace(/,/g,''),10);if(!isNaN(v))s.patients=v;}
+
+    s.staff.forEach((st, ti) => {
+      const cn=r(`sc_${si}_${ti}_cnt`), sl=r(`sc_${si}_${ti}_sal`);
+      if(cn){const v=parseInt(cn.value,10);if(!isNaN(v))st.count=Math.max(0,v);}
+      if(sl){const v=parseInt(sl.value.replace(/,/g,''),10);if(!isNaN(v))st.salary=v;}
+    });
+
+    const pp=r('pt_'+si+'_price'), pk=r('pt_'+si+'_koma');
+    if(pp){const v=parseInt(pp.value.replace(/,/g,''),10);if(!isNaN(v))s.ptDr.komaPrice=v;}
+    if(pk){const v=parseInt(pk.value,10);if(!isNaN(v))s.ptDr.komaPerMonth=v;}
+
+    costDefs.forEach(cd => {
+      const el=r(`sc_${si}_${cd.k}`);
+      if(!el)return;
+      const v=parseInt(el.value.replace(/,/g,''),10);
+      if(!isNaN(v))s.costs[cd.k]=v;
+    });
+  });
+}
+
+// ══════════════════════════════════════
+// CALCULATIONS
+// ══════════════════════════════════════
+function calcSI(gross) {
+  const h=Math.round(gross*SI.healthIns/100);
+  const pb=Math.min(gross,SI.pensionCap);
+  const p=Math.round(pb*SI.pension/100);
+  const e=Math.round(gross*SI.employIns/100);
+  const a=Math.round(gross*SI.accidentIns/100);
+  const c=Math.round(gross*SI.childCare/100);
+  const t=h+p+e+a+c;
+  return{health:h,pen:p,employ:e,accident:a,child:c,total:t,
+    rate:gross>0?t/gross*100:0,pensionBase:pb};
+}
+
+function calcOneSite(s) {
+  const revenue = s.patients * s.unitPrice;
+
+  // 常勤スタッフ費用（人数×月給 + 社保）
+  const staffDetail = s.staff.map(st => {
+    const si = calcSI(st.salary);
+    const gross = st.salary * st.count;
+    const siCost = si.total * st.count;
+    return { ...st, gross, siCost, total: gross + siCost, siData: si };
+  });
+  const totalStaffGross = staffDetail.reduce((a,d)=>a+d.gross, 0);
+  const totalStaffSI    = staffDetail.reduce((a,d)=>a+d.siCost, 0);
+  const totalStaffLabor = totalStaffGross + totalStaffSI;
+
+  // 非常勤医師（外注・社保なし）
+  const ptDrCost = s.ptDr.komaPrice * s.ptDr.komaPerMonth;
+  const totalLabor = totalStaffLabor + ptDrCost;
+
+  // 常勤医師人数合計（週5+4+3、燃料費算出用）
+  const drCount = s.staff.filter(st=>['dr5','dr4','dr3'].includes(st.id)).reduce((a,st)=>a+st.count,0);
+
+  // 固定費
+  const c = s.costs;
+  const carTotal = c.carCount * c.carLease;
+  const fixedCosts = c.officeRent + c.nightShift + carTotal + c.systemCost + c.insurance + c.supplies + c.otherFixed;
+
+  // 変動費
+  const fuel = c.fuelPerDr * drCount;
+  const consumable = c.consumablePerPt * s.patients;
+  const variable = fuel + consumable;
+
+  const totalCost = totalLabor + fixedCosts + variable;
+  const profit = revenue - totalCost;
+  const margin = revenue > 0 ? profit/revenue*100 : 0;
+  const laborRatio = revenue > 0 ? totalLabor/revenue*100 : 0;
+  const siRatio = revenue > 0 ? totalStaffSI/revenue*100 : 0;
+  const ptDrRatio = revenue > 0 ? ptDrCost/revenue*100 : 0;
+
+  // BEP: 固定費 / (単価 - 患者あたり変動費)
+  // 固定費 = 全労働費 + 固定コスト + 燃料(医師数固定前提)
+  const bepFixed = totalLabor + fixedCosts + fuel;
+  const bepMarginPt = s.unitPrice - c.consumablePerPt;
+  const bepPatients = bepMarginPt > 0 ? Math.ceil(bepFixed / bepMarginPt) : 99999;
+  const bepRevenue = bepPatients * s.unitPrice;
+
+  return {
+    s, revenue, staffDetail,
+    totalStaffGross, totalStaffSI, totalStaffLabor,
+    ptDrCost, totalLabor,
+    officeRent:c.officeRent, nightShift:c.nightShift,
+    carTotal, systemCost:c.systemCost, insuranceCost:c.insurance,
+    supplies:c.supplies, otherFixed:c.otherFixed, fixedCosts,
+    fuel, consumable, variable,
+    totalCost, profit, margin, laborRatio, siRatio, ptDrRatio,
+    bepPatients, bepRevenue,
+  };
+}
+
+function calcHQ() {
+  let gross=0, siTotal=0;
+  const detail = directors.map(d => {
+    const si = d.hasSI ? calcSI(d.salary) : {total:0};
+    gross += d.salary; siTotal += si.total;
+    return {...d, si:si.total, total:d.salary+si.total};
+  });
+  return {detail, gross, siTotal, totalCost:gross+siTotal};
+}
+
+// ══════════════════════════════════════
+// RENDER HELPERS
+// ══════════════════════════════════════
+function yen(v){return(v<0?'▲':'')+Math.abs(v).toLocaleString();}
+function pct(v,cls){
+  const c=v>60?'var(--red)':v>50?'var(--orange)':'var(--green)';
+  return`<td style="color:${c};font-weight:700">${v.toFixed(1)}%</td>`;
+}
+
+function trow(label, val, opts={}) {
+  const {cls='', color='', indent=false} = opts;
+  const lbl = indent ? `　${label}` : label;
+  const style = color ? `style="color:${color}"` : '';
+  return `<tr class="${cls}"><td>${lbl}</td><td ${style}>${yen(val)}</td></tr>`;
+}
+function tcat(label) {
+  return `<tr class="cat"><td>${label}</td><td></td></tr>`;
+}
+
+// ══════════════════════════════════════
+// SI BREAKDOWN RENDER
+// ══════════════════════════════════════
+function renderSIBreakdown() {
+  // Collect unique roles across all sites
+  const roleMap = {};
+  sites.forEach(s => {
+    s.staff.forEach(st => {
+      if (!roleMap[st.id]) roleMap[st.id] = {label:st.label, salary:st.salary};
+      else if (st.salary > 0) roleMap[st.id].salary = st.salary;
+    });
+  });
+  const roles = Object.values(roleMap);
+  directors.filter(d=>d.hasSI&&d.salary>0).forEach(d=>roles.push({label:d.name+'（役員）',salary:d.salary}));
+
+  let html=`<div class="si-wrap"><table class="si-tbl"><thead><tr>
+    <th>職種</th><th>額面月給</th>
+    <th>健康保険<br><span style="font-weight:400">${SI.healthIns}%</span></th>
+    <th>厚生年金<br><span style="font-weight:400">${SI.pension}%</span></th>
+    <th>雇用保険<br><span style="font-weight:400">${SI.employIns}%</span></th>
+    <th>労災保険<br><span style="font-weight:400">${SI.accidentIns}%</span></th>
+    <th>子育て拠出金<br><span style="font-weight:400">${SI.childCare}%</span></th>
+    <th>法定福利費計</th><th>実質料率</th>
+    <th>総人件費<br><span style="font-weight:400">額面+社保</span></th>
+    </tr></thead><tbody>`;
+  let sg=0,ss=0;
+  roles.forEach(r=>{
+    const si=calcSI(r.salary);sg+=r.salary;ss+=si.total;
+    const cap=si.pensionBase<r.salary?' *':'';
+    html+=`<tr><td>${r.label}</td><td>${yen(r.salary)}</td>
+      <td>${yen(si.health)}</td><td>${yen(si.pen)}${cap}</td>
+      <td>${yen(si.employ)}</td><td>${yen(si.accident)}</td><td>${yen(si.child)}</td>
+      <td style="color:var(--orange);font-weight:700">${yen(si.total)}</td>
+      <td style="color:var(--text-dim)">${si.rate.toFixed(1)}%</td>
+      <td style="color:var(--accent);font-weight:700">${yen(r.salary+si.total)}</td></tr>`;
+  });
+  // Show pt-dr note if any site uses them
+  const anyPt = sites.some(s=>s.ptDr.komaPerMonth>0);
+  if(anyPt){
+    html+=`<tr style="background:rgba(146,64,14,.04)"><td>非常勤医師 <span class="badge ext">外注</span></td>
+      <td colspan="8" style="text-align:center;font-family:'Noto Sans JP',sans-serif;color:var(--text-dim)">社会保険料なし（外注費扱い）— コマ単価×月コマ数で計上</td>
+      <td style="color:var(--yellow);font-weight:700">拠点別</td></tr>`;
+  }
+  html+=`<tr class="si-tot"><td>合計（1名ベース）</td><td>${yen(sg)}</td><td colspan="5"></td>
+    <td style="color:var(--orange)">${yen(ss)}</td>
+    <td style="color:var(--text-dim)">${sg>0?(ss/sg*100).toFixed(1):'0.0'}%</td>
+    <td style="color:var(--accent)">${yen(sg+ss)}</td></tr>`;
+  html+=`</tbody></table></div>`;
+  html+=`<p class="note" style="margin-top:6px">* 印 … 厚生年金は標準報酬月額上限（¥${SI.pensionCap.toLocaleString()}）でキャップ。</p>`;
+  document.getElementById('siOut').innerHTML=html;
+}
+
+// ══════════════════════════════════════
+// RENDER SITE P/L
+// ══════════════════════════════════════
+function renderSite(siteIdx) {
+  const r = calcOneSite(sites[siteIdx]);
+  const s = sites[siteIdx];
+  const hasPt = s.ptDr.komaPerMonth > 0;
+
+  let html = `<div class="stitle">📊 ${s.name} ── P/L サマリー</div>`;
+  html += `<div class="sgrid">`;
+  html += `<div class="scard ${r.profit>=0?'g':'r'}">
+    <div class="sl">営業利益</div>
+    <div class="sv">${r.profit>=0?'+':''}${yen(r.profit)}</div>
+    <div class="ss">利益率 ${r.margin.toFixed(1)}%</div></div>`;
+  html += `<div class="scard"><div class="sl">売上高</div>
+    <div class="sv" style="color:var(--accent)">${yen(r.revenue)}</div>
+    <div class="ss">${s.patients}名 × ¥${s.unitPrice.toLocaleString()}</div></div>`;
+  html += `<div class="scard"><div class="sl">人件費合計（社保込）</div>
+    <div class="sv" style="color:var(--orange)">${yen(r.totalLabor)}</div>
+    <div class="ss">人件費率 ${r.laborRatio.toFixed(1)}%</div></div>`;
+  html += `<div class="scard"><div class="sl">損益分岐 患者数</div>
+    <div class="sv" style="color:var(--orange)">${r.bepPatients}名</div>
+    <div class="ss">現在 ${s.patients}名（${s.patients>=r.bepPatients?'✅ 黒字':'⚠ 赤字'}）</div></div>`;
+  html += `<div class="scard"><div class="sl">損益分岐 売上</div>
+    <div class="sv" style="color:var(--text-dim); font-size:13px">${yen(r.bepRevenue)}</div>
+    <div class="ss">¥/月</div></div>`;
+  if(hasPt){
+    html += `<div class="scard"><div class="sl">非常勤医師費用</div>
+      <div class="sv" style="color:var(--yellow)">${yen(r.ptDrCost)}</div>
+      <div class="ss">${s.ptDr.komaPerMonth}コマ × ¥${s.ptDr.komaPrice.toLocaleString()}</div></div>`;
+  }
+  html += `</div>`;
+
+  // P/L table
+  html += `<div class="stitle">📋 ${s.name} 月次損益計算書</div>`;
+  html += `<div class="twrap"><table class="out"><thead><tr><th>科目</th><th>金額</th></tr></thead><tbody>`;
+
+  html += tcat('【売上高】');
+  html += trow('診療報酬収入', r.revenue);
+  html += trow('売上高 合計', r.revenue, {cls:'sub'});
+
+  html += tcat('【人件費：常勤スタッフ】');
+  r.staffDetail.forEach(st => {
+    if (st.count === 0) return;
+    html += trow(`${st.label}（${st.count}名）`, st.gross);
+    html += trow('　└ 法定福利費', st.siCost, {color:'var(--orange)'});
+  });
+  html += trow('常勤スタッフ 小計（社保込）', r.totalStaffLabor, {cls:'sub'});
+
+  if (hasPt) {
+    html += tcat('【非常勤医師費用】');
+    html += `<tr><td>非常勤医師 外注費 <span class="badge ext">外注</span><br>
+      <span style="font-size:10px;color:var(--text-dim)">¥${s.ptDr.komaPrice.toLocaleString()} × ${s.ptDr.komaPerMonth}コマ</span></td>
+      <td style="color:var(--yellow);font-weight:700">${yen(r.ptDrCost)}</td></tr>`;
+  }
+
+  html += trow('★ 人件費 総合計（社保込）', r.totalLabor, {cls:'sub'});
+
+  html += tcat('【固定費】');
+  html += trow('事務所賃料', r.officeRent, {color:'var(--teal)'});
+  html += trow('夜間当直 外注費', r.nightShift, {color:'var(--purple)'});
+  html += trow('車両リース', r.carTotal);
+  html += trow('電子カルテ・システム', r.systemCost);
+  html += trow('保険・諸会費', r.insuranceCost);
+  html += trow('材料・通信・消耗品', r.supplies);
+  html += trow('その他雑費', r.otherFixed);
+  html += trow('固定費 合計', r.fixedCosts, {cls:'sub'});
+
+  html += tcat('【変動費】');
+  html += trow('燃料費', r.fuel);
+  html += trow('患者消耗品', r.consumable);
+  html += trow('変動費 合計', r.variable, {cls:'sub'});
+  html += trow('総費用', r.totalCost, {cls:'sub'});
+
+  // Profit row
+  const pc = r.profit>=0?'var(--green)':'var(--red)';
+  html += `<tr class="profit"><td>営業利益</td><td style="color:${pc}">${r.profit>=0?'+':''}${yen(r.profit)}</td></tr>`;
+
+  // KPI rows
+  html += `<tr><td>営業利益率</td><td style="color:${r.margin>=0?'var(--green)':'var(--red)'};font-weight:700">${r.margin.toFixed(1)}%</td></tr>`;
+  html += `<tr><td>人件費率（社保込）</td>`;
+  html += `<td style="color:${r.laborRatio>60?'var(--red)':r.laborRatio>50?'var(--orange)':'var(--green)'};font-weight:700">${r.laborRatio.toFixed(1)}%</td></tr>`;
+  html += `<tr><td>社保費用比率</td><td style="color:var(--orange);font-weight:700">${r.siRatio.toFixed(1)}%</td></tr>`;
+  if(hasPt) html += `<tr><td>非常勤医師費用比率</td><td style="color:var(--yellow);font-weight:700">${r.ptDrRatio.toFixed(1)}%</td></tr>`;
+  html += `<tr class="bep"><td>損益分岐 患者数</td><td>${r.bepPatients}名</td></tr>`;
+  html += `<tr class="bep"><td>損益分岐 売上（月）</td><td>${yen(r.bepRevenue)}</td></tr>`;
+  html += `</tbody></table></div>`;
+
+  // Staff detail breakdown
+  html += `<div class="stitle">👤 人員内訳</div>`;
+  html += `<div class="twrap"><table class="out" style="min-width:300px"><thead><tr>
+    <th>職種</th><th>人数</th><th>月給（額面）</th><th>法定福利費/人</th><th>月額計（社保込）</th>
+    </tr></thead><tbody>`;
+  r.staffDetail.forEach(st => {
+    const si = calcSI(st.salary);
+    html += `<tr ${st.count===0?'style="opacity:.4"':''}>
+      <td>${st.label} <span class="badge si">社保</span></td>
+      <td style="text-align:right">${st.count}名</td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace">${yen(st.salary)}</td>
+      <td style="text-align:right;color:var(--orange);font-family:'JetBrains Mono',monospace">${yen(si.total)}</td>
+      <td style="text-align:right;font-weight:700;font-family:'JetBrains Mono',monospace">${yen(st.total)}</td></tr>`;
+  });
+  if(hasPt){
+    html += `<tr><td>非常勤医師 <span class="badge ext">外注</span></td>
+      <td style="text-align:right;color:var(--text-dim)">${s.ptDr.komaPerMonth}コマ</td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace">${yen(s.ptDr.komaPrice)}/コマ</td>
+      <td style="text-align:right;color:var(--text-dim)">-</td>
+      <td style="text-align:right;color:var(--yellow);font-weight:700;font-family:'JetBrains Mono',monospace">${yen(r.ptDrCost)}</td></tr>`;
+  }
+  html += `<tr class="sub"><td>合計</td><td></td><td></td><td style="text-align:right;color:var(--orange);font-family:'JetBrains Mono',monospace">${yen(r.totalStaffSI)}</td>
+    <td style="text-align:right;font-weight:700;font-family:'JetBrains Mono',monospace">${yen(r.totalLabor)}</td></tr>`;
+  html += `</tbody></table></div>`;
+
+  return html;
+}
+
+// ══════════════════════════════════════
+// RENDER CONSOLIDATED
+// ══════════════════════════════════════
+function renderConsolidated() {
+  const hq = calcHQ();
+  const sR = sites.map(s => calcOneSite(s));
+
+  const totalRev     = sR.reduce((a,r)=>a+r.revenue, 0);
+  const totalLabor   = sR.reduce((a,r)=>a+r.totalLabor, 0);
+  const totalFixed   = sR.reduce((a,r)=>a+r.fixedCosts, 0);
+  const totalVar     = sR.reduce((a,r)=>a+r.variable, 0);
+  const totalCost    = sR.reduce((a,r)=>a+r.totalCost, 0);
+  const siteProfit   = sR.reduce((a,r)=>a+r.profit, 0);
+  const totalPt      = sites.reduce((a,s)=>a+s.patients, 0);
+  const consolidatedProfit = siteProfit - hq.totalCost;
+  const conMargin    = totalRev>0?consolidatedProfit/totalRev*100:0;
+  const totalLaborWithHQ = totalLabor + hq.totalCost;
+  const laborRatio   = totalRev>0?totalLaborWithHQ/totalRev*100:0;
+
+  let html = '';
+  const bc = consolidatedProfit>=0?'var(--green)':'var(--red)';
+  html += `<div class="banner">
+    <div style="font-size:12px;font-weight:700;color:var(--orange)">法人全体 月次連結損益</div>
+    <div class="bn" style="color:${bc}">${consolidatedProfit>=0?'+':''}${yen(consolidatedProfit)}円</div>
+    <div class="bs">売上計 ${yen(totalRev)} ｜ 利益率 ${conMargin.toFixed(1)}% ｜ 総患者 ${totalPt}名</div>
+  </div>`;
+
+  // 拠点比較表（横並び）
+  html += `<div class="stitle">📊 拠点別 × 連結 比較表</div>`;
+  html += `<div class="twrap"><table class="out" style="min-width:${300+sites.length*130}px"><thead><tr>
+    <th>科目</th>`;
+  sites.forEach(s=>html+=`<th>${s.name}</th>`);
+  html+=`<th style="color:var(--purple)">本部</th><th style="color:var(--orange)">法人合計</th>
+    </tr></thead><tbody>`;
+
+  const D = () => sites.map(()=>'<td>-</td>').join('');
+  const DR = fn => sites.map((_,i)=>`<td>${yen(fn(sR[i]))}</td>`).join('');
+  const SUM = fn => sR.reduce((a,r)=>a+fn(r),0);
+
+  html += `<tr class="cat"><td>【売上高】</td>${D()}<td></td><td></td></tr>`;
+  html += `<tr><td>診療報酬収入</td>${DR(r=>r.revenue)}<td>-</td><td style="font-weight:700">${yen(totalRev)}</td></tr>`;
+  html += `<tr><td>　患者数</td>`;
+  sites.forEach(s=>html+=`<td style="color:var(--text-dim)">${s.patients}名</td>`);
+  html+=`<td>-</td><td style="color:var(--text-dim)">${totalPt}名</td></tr>`;
+
+  html += `<tr class="cat"><td>【人件費（社保込）】</td>${D()}<td></td><td></td></tr>`;
+  html += `<tr><td>常勤スタッフ（社保込）</td>${DR(r=>r.totalStaffLabor)}<td>-</td><td>${yen(SUM(r=>r.totalStaffLabor))}</td></tr>`;
+  const anyPt = sites.some(s=>s.ptDr.komaPerMonth>0);
+  if(anyPt){
+    html += `<tr><td>非常勤医師 <span class="badge ext">外注</span></td>`;
+    sites.forEach((s,i)=>html+=`<td style="color:var(--yellow)">${yen(sR[i].ptDrCost)}</td>`);
+    html+=`<td>-</td><td style="color:var(--yellow)">${yen(SUM(r=>r.ptDrCost))}</td></tr>`;
+  }
+  html += `<tr><td>理事報酬（社保込）</td>${D()}<td style="color:var(--purple);font-weight:700">${yen(hq.totalCost)}</td><td>${yen(hq.totalCost)}</td></tr>`;
+  html += `<tr class="sub"><td>人件費 合計</td>${DR(r=>r.totalLabor)}<td>${yen(hq.totalCost)}</td><td style="font-weight:700">${yen(totalLaborWithHQ)}</td></tr>`;
+
+  html += `<tr class="cat"><td>【固定費・変動費】</td>${D()}<td></td><td></td></tr>`;
+  html += `<tr><td>　事務所賃料</td>`;
+  sites.forEach((s,i)=>html+=`<td style="color:var(--teal)">${yen(sR[i].officeRent)}</td>`);
+  html+=`<td>-</td><td style="color:var(--teal)">${yen(SUM(r=>r.officeRent))}</td></tr>`;
+  html += `<tr><td>　夜間当直外注費</td>`;
+  sites.forEach((s,i)=>html+=`<td style="color:var(--purple)">${yen(sR[i].nightShift)}</td>`);
+  html+=`<td>-</td><td style="color:var(--purple)">${yen(SUM(r=>r.nightShift))}</td></tr>`;
+  html += `<tr><td>　その他経費</td>`;
+  sites.forEach((s,i)=>html+=`<td>${yen(sR[i].fixedCosts+sR[i].variable-sR[i].officeRent-sR[i].nightShift)}</td>`);
+  const othSum=SUM(r=>r.fixedCosts+r.variable-r.officeRent-r.nightShift);
+  html+=`<td>-</td><td>${yen(othSum)}</td></tr>`;
+  html += `<tr class="sub"><td>総費用</td>${DR(r=>r.totalCost)}<td>${yen(hq.totalCost)}</td><td style="font-weight:700">${yen(totalCost+hq.totalCost)}</td></tr>`;
+
+  html += `<tr><td>拠点別営業利益</td>`;
+  sR.forEach(r=>html+=`<td style="color:${r.profit>=0?'var(--green)':'var(--red)'};font-weight:700">${r.profit>=0?'+':''}${yen(r.profit)}</td>`);
+  html+=`<td style="color:var(--red)">▲${yen(hq.totalCost)}</td>
+    <td style="color:${consolidatedProfit>=0?'var(--green)':'var(--red)'};font-weight:900;font-size:13px">${consolidatedProfit>=0?'+':''}${yen(consolidatedProfit)}</td></tr>`;
+
+  html += `<tr><td>営業利益率</td>`;
+  sR.forEach(r=>html+=`<td style="color:${r.margin>=0?'var(--green)':'var(--red)'};font-weight:700">${r.margin.toFixed(1)}%</td>`);
+  html+=`<td>-</td><td style="color:${conMargin>=0?'var(--green)':'var(--red)'};font-weight:700">${conMargin.toFixed(1)}%</td></tr>`;
+  html += `<tr><td>人件費率</td>`;
+  sR.forEach(r=>html+=`<td style="color:${r.laborRatio>60?'var(--red)':r.laborRatio>50?'var(--orange)':'var(--green)'};font-weight:700">${r.laborRatio.toFixed(1)}%</td>`);
+  html+=`<td>-</td><td style="color:${laborRatio>60?'var(--red)':laborRatio>50?'var(--orange)':'var(--green)'};font-weight:700">${laborRatio.toFixed(1)}%</td></tr>`;
+  html += `<tr class="bep"><td>損益分岐 患者数</td>`;
+  sR.forEach(r=>html+=`<td>${r.bepPatients}名</td>`);
+  html+=`<td>-</td><td>-</td></tr>`;
+  html += `</tbody></table></div>`;
+
+  // HQ detail
+  if(directors.some(d=>d.salary>0)){
+    html += `<div class="stitle">🏛 理事報酬 内訳</div>`;
+    html += `<div class="twrap"><table class="out" style="min-width:300px"><thead><tr>
+      <th>氏名/役職</th><th>月額報酬</th><th>社保</th><th>法定福利費</th><th>総コスト</th></tr></thead><tbody>`;
+    hq.detail.forEach(d=>{
+      html+=`<tr><td>${d.name}</td>
+        <td>${yen(d.salary)}</td><td>${d.hasSI?'あり':'なし'}</td>
+        <td style="color:var(--orange)">${yen(d.si)}</td>
+        <td style="font-weight:700">${yen(d.total)}</td></tr>`;
+    });
+    html+=`<tr class="sub"><td>合計（${directors.length}名）</td><td>${yen(hq.gross)}</td><td></td>
+      <td style="color:var(--orange)">${yen(hq.siTotal)}</td>
+      <td style="font-weight:700">${yen(hq.totalCost)}</td></tr>`;
+    html+=`</tbody></table></div>`;
+  }
+
+  return html;
+}
+
+// ══════════════════════════════════════
+// RESULT TAB CONTROLLER
+// ══════════════════════════════════════
+let activeTab = 'total';
+function buildRTabs() {
+  const c = document.getElementById('rtabs');
+  c.innerHTML = '';
+  let btn = document.createElement('div');
+  btn.className = 'rtab total'+(activeTab==='total'?' on':'');
+  btn.innerHTML = `<div>📊 法人連結</div><div class="rs">3拠点合算</div>`;
+  btn.onclick = ()=>{activeTab='total';showTab();};
+  c.appendChild(btn);
+  sites.forEach((s,i)=>{
+    btn = document.createElement('div');
+    btn.className='rtab'+(activeTab==='s'+i?' on':'');
+    btn.innerHTML=`<div>🏥 ${s.name}</div><div class="rs">${s.patients}名</div>`;
+    btn.onclick=()=>{activeTab='s'+i;showTab();};
+    c.appendChild(btn);
+  });
+}
+function showTab() {
+  buildRTabs();
+  const out = document.getElementById('rout');
+  if(activeTab==='total') out.innerHTML=renderConsolidated();
+  else out.innerHTML=renderSite(parseInt(activeTab.replace('s',''),10));
+}
+
+
+// ══════════════════════════════════════
+// SCENARIO MANAGER
+// ══════════════════════════════════════
+const SCN_KEY = 'houmon_scenarios_v1';
+
+function getAllScenarios() {
+  try { return JSON.parse(localStorage.getItem(SCN_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+function saveAllScenarios(arr) {
+  localStorage.setItem(SCN_KEY, JSON.stringify(arr));
+}
+
+function captureState() {
+  // Read current UI values first
+  readSI(); readDirs(); readSiteConfigs();
+  return {
+    SI: JSON.parse(JSON.stringify(SI)),
+    sites: JSON.parse(JSON.stringify(sites)),
+    directors: JSON.parse(JSON.stringify(directors)),
+  };
+}
+
+function applyState(state) {
+  // SI rates
+  Object.assign(SI, state.SI);
+  // Sites
+  sites = JSON.parse(JSON.stringify(state.sites));
+  // Directors
+  directors = JSON.parse(JSON.stringify(state.directors));
+  // Rebuild UI
+  buildSIGrid();
+  renderDirs();
+  buildSiteUI();
+  renderAll();
+}
+
+function saveScenario() {
+  const name = document.getElementById('scnNameInp').value.trim();
+  if (!name) { alert('シナリオ名を入力してください'); return; }
+  const arr = getAllScenarios();
+  const existing = arr.findIndex(s => s.name === name);
+  const entry = {
+    name,
+    savedAt: new Date().toLocaleString('ja-JP'),
+    state: captureState(),
+  };
+  if (existing >= 0) {
+    if (!confirm(`「${name}」を上書きしますか？`)) return;
+    arr[existing] = entry;
+  } else {
+    arr.push(entry);
+  }
+  saveAllScenarios(arr);
+  document.getElementById('scnNameInp').value = '';
+  renderScenarioList();
+}
+
+function loadScenario(idx) {
+  const arr = getAllScenarios();
+  if (!arr[idx]) return;
+  if (!confirm(`「${arr[idx].name}」を読み込みます。現在の入力値は上書きされます。`)) return;
+  applyState(arr[idx].state);
+}
+
+function deleteScenario(idx) {
+  const arr = getAllScenarios();
+  if (!arr[idx]) return;
+  if (!confirm(`「${arr[idx].name}」を削除しますか？`)) return;
+  arr.splice(idx, 1);
+  saveAllScenarios(arr);
+  // Clear compare if deleted
+  if (compareA === idx || compareB === idx) { compareA = null; compareB = null; }
+  renderScenarioList();
+  renderCompare();
+}
+
+// ── Compare ──
+let compareA = null, compareB = null;
+
+function toggleCompare(slot, idx) {
+  if (slot === 'A') {
+    compareA = (compareA === idx) ? null : idx;
+  } else {
+    compareB = (compareB === idx) ? null : idx;
+  }
+  renderScenarioList();
+  renderCompare();
+}
+
+function renderScenarioList() {
+  const arr = getAllScenarios();
+  const c = document.getElementById('scnList');
+  if (arr.length === 0) {
+    c.innerHTML = '<div class="scn-empty">保存済みシナリオはありません</div>';
+    return;
+  }
+  c.innerHTML = '';
+  arr.forEach((s, i) => {
+    const isA = compareA === i, isB = compareB === i;
+    const div = document.createElement('div');
+    div.className = 'scn-item' + (isA ? ' compare-a' : isB ? ' compare-b' : '');
+    div.innerHTML = `
+      <div style="flex:1">
+        <div class="scn-item-name">${s.name}
+          ${isA ? '<span style="font-size:10px;color:var(--accent);margin-left:6px">[比較A]</span>' : ''}
+          ${isB ? '<span style="font-size:10px;color:var(--purple);margin-left:6px">[比較B]</span>' : ''}
+        </div>
+        <div class="scn-item-meta">保存日時：${s.savedAt}</div>
+      </div>
+      <div class="scn-item-btns">
+        <button class="scn-ibtn load" onclick="loadScenario(${i})">読み込み</button>
+        <button class="scn-ibtn cmp-a" onclick="toggleCompare('A',${i})">比較A</button>
+        <button class="scn-ibtn cmp-b" onclick="toggleCompare('B',${i})">比較B</button>
+        <button class="scn-ibtn del" onclick="deleteScenario(${i})">削除</button>
+      </div>`;
+    c.appendChild(div);
+  });
+}
+
+function renderCompare() {
+  const wrap = document.getElementById('scnCompare');
+  const cont = document.getElementById('scnCmpContent');
+  if (compareA === null || compareB === null) { wrap.style.display='none'; return; }
+  const arr = getAllScenarios();
+  const sA = arr[compareA], sB = arr[compareB];
+  if (!sA || !sB) { wrap.style.display='none'; return; }
+  wrap.style.display = 'block';
+
+  // Calc both
+  const rA = calcStateResults(sA.state);
+  const rB = calcStateResults(sB.state);
+
+  let html = '';
+
+  // Side-by-side summary
+  html += `<div class="cmp-grid">`;
+  ['A','B'].forEach((slot, si) => {
+    const r = si===0?rA:rB;
+    const sc = si===0?sA:sB;
+    const col = si===0?'var(--accent)':'var(--purple)';
+    html += `<div class="cmp-col ${slot.toLowerCase()}">
+      <div class="cmp-col-title">
+        <span style="color:${col};font-size:16px">●</span>
+        <span>${slot === 'A' ? '比較A' : '比較B'}：${sc.name}</span>
+      </div>
+      <table class="cmp-tbl">
+        <tr class="cmp-cat"><td colspan="2">【売上・損益】</td></tr>
+        <tr><td>売上高合計</td><td>${yen(r.totalRev)}</td></tr>
+        <tr><td>人件費合計（社保込）</td><td>${yen(r.totalLabor)}</td></tr>
+        <tr><td>固定費合計</td><td>${yen(r.totalFixed)}</td></tr>
+        <tr><td>変動費合計</td><td>${yen(r.totalVar)}</td></tr>
+        <tr><td>本部費用（理事）</td><td>${yen(r.hqCost)}</td></tr>
+        <tr class="cmp-profit"><td>連結営業利益</td>
+          <td style="color:${r.consolidatedProfit>=0?'var(--green)':'var(--red)'}">${r.consolidatedProfit>=0?'+':''}${yen(r.consolidatedProfit)}</td></tr>
+        <tr><td>連結利益率</td>
+          <td style="color:${r.conMargin>=0?'var(--green)':'var(--red)'}">${r.conMargin.toFixed(1)}%</td></tr>
+        <tr><td>人件費率</td><td>${r.laborRatio.toFixed(1)}%</td></tr>
+        <tr class="cmp-cat"><td colspan="2">【拠点別損益】</td></tr>
+        ${r.siteResults.map((sr,i)=>
+          `<tr><td>${r.siteNames[i]}</td>
+           <td style="color:${sr.profit>=0?'var(--green)':'var(--red)'}">${sr.profit>=0?'+':''}${yen(sr.profit)}</td></tr>`
+        ).join('')}
+      </table>
+    </div>`;
+  });
+  html += `</div>`;
+
+  // Diff table
+  html += `<div class="cmp-diff">
+    <div class="cmp-diff-title">📐 差分（B − A）</div>
+    <table class="diff-tbl">
+      <thead><tr><th>指標</th><th>${sA.name}（A）</th><th>${sB.name}（B）</th><th>差分</th></tr></thead>
+      <tbody>`;
+  const diffRows = [
+    { l:'売上高合計',         a:rA.totalRev,             b:rB.totalRev },
+    { l:'人件費合計（社保込）',a:rA.totalLabor,           b:rB.totalLabor },
+    { l:'本部費用',           a:rA.hqCost,               b:rB.hqCost },
+    { l:'総費用',             a:rA.totalCost+rA.hqCost,  b:rB.totalCost+rB.hqCost },
+    { l:'連結営業利益',       a:rA.consolidatedProfit,   b:rB.consolidatedProfit },
+    { l:'連結利益率',         a:rA.conMargin,            b:rB.conMargin, isPct:true },
+    { l:'人件費率',           a:rA.laborRatio,           b:rB.laborRatio, isPct:true },
+    { l:'総患者数',           a:rA.totalPt,              b:rB.totalPt, isRaw:true },
+  ];
+  diffRows.forEach(d => {
+    const diff = d.b - d.a;
+    const fmt = v => d.isPct ? v.toFixed(1)+'%' : d.isRaw ? v+'名' : yen(v);
+    const diffColor = diff > 0 ? 'var(--green)' : diff < 0 ? 'var(--red)' : 'var(--text-dim)';
+    const diffStr = d.isPct ? (diff>=0?'+':'')+diff.toFixed(1)+'%'
+                  : d.isRaw ? (diff>=0?'+':'')+diff+'名'
+                  : (diff>=0?'+':'')+yen(diff);
+    html += `<tr><td>${d.l}</td><td>${fmt(d.a)}</td><td>${fmt(d.b)}</td>
+      <td style="color:${diffColor};font-weight:700">${diffStr}</td></tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  cont.innerHTML = html;
+}
+
+function calcStateResults(state) {
+  // Temporarily swap global state, calc, restore
+  const origSI = JSON.parse(JSON.stringify(SI));
+  const origSites = JSON.parse(JSON.stringify(sites));
+  const origDirs = JSON.parse(JSON.stringify(directors));
+
+  Object.assign(SI, state.SI);
+  sites = JSON.parse(JSON.stringify(state.sites));
+  directors = JSON.parse(JSON.stringify(state.directors));
+
+  const hq = calcHQ();
+  const siteResults = sites.map(s => calcOneSite(s));
+  const totalRev   = siteResults.reduce((a,r)=>a+r.revenue,0);
+  const totalLabor = siteResults.reduce((a,r)=>a+r.totalLabor,0);
+  const totalFixed = siteResults.reduce((a,r)=>a+r.fixedCosts,0);
+  const totalVar   = siteResults.reduce((a,r)=>a+r.variable,0);
+  const totalCost  = siteResults.reduce((a,r)=>a+r.totalCost,0);
+  const totalPt    = sites.reduce((a,s)=>a+s.patients,0);
+  const consolidatedProfit = siteResults.reduce((a,r)=>a+r.profit,0) - hq.totalCost;
+  const conMargin  = totalRev>0?consolidatedProfit/totalRev*100:0;
+  const totalLaborWithHQ = totalLabor+hq.totalCost;
+  const laborRatio = totalRev>0?totalLaborWithHQ/totalRev*100:0;
+
+  // Restore
+  Object.assign(SI, origSI);
+  sites = origSites;
+  directors = origDirs;
+
+  return { totalRev, totalLabor, totalFixed, totalVar, totalCost,
+    hqCost:hq.totalCost, consolidatedProfit, conMargin,
+    totalLaborWithHQ, laborRatio, totalPt,
+    siteResults, siteNames: state.sites.map(s=>s.name) };
+}
+
+// ── JSON Export / Import ──
+function exportJSON() {
+  const arr = getAllScenarios();
+  if (arr.length === 0) { alert('保存済みシナリオがありません'); return; }
+  const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '訪問診療シナリオ_' + new Date().toLocaleDateString('ja-JP').replace(/\//g,'-') + '.json';
+  a.click();
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const arr = JSON.parse(e.target.result);
+      if (!Array.isArray(arr)) throw new Error('Invalid format');
+      const existing = getAllScenarios();
+      let added = 0, skipped = 0;
+      arr.forEach(s => {
+        if (existing.find(e => e.name === s.name)) { skipped++; }
+        else { existing.push(s); added++; }
+      });
+      saveAllScenarios(existing);
+      renderScenarioList();
+      alert(`インポート完了：${added}件追加、${skipped}件スキップ（同名）`);
+    } catch(err) {
+      alert('JSONファイルの読み込みに失敗しました');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ══════════════════════════════════════
+// MAIN
+// ══════════════════════════════════════
+function renderAll() {
+  readSI(); readDirs(); readSiteConfigs();
+  updateStaffComputed();
+  renderSIBreakdown();
+  buildRTabs(); showTab();
+}
+
+buildSIGrid();
+renderDirs();
+buildSiteUI();
+renderAll();
+renderScenarioList();
+</script>
+</body>
+</html>
