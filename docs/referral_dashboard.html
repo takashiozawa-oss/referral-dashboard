@@ -326,6 +326,31 @@
     color: var(--accent); border-radius: 20px;
     font-size: 12px; font-weight: 700;
   }
+
+  /* SUGGEST INPUT */
+  .suggest-wrap { position: relative; }
+  .suggest-input { width: 100%; }
+  .suggest-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    z-index: 300; max-height: 220px; overflow-y: auto;
+    display: none;
+  }
+  .suggest-dropdown.open { display: block; }
+  .suggest-item {
+    padding: 10px 14px; cursor: pointer; font-size: 13px;
+    border-bottom: 1px solid var(--border); transition: background .1s;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .suggest-item:last-child { border-bottom: none; }
+  .suggest-item:hover, .suggest-item.active { background: var(--accent-l); }
+  .suggest-item-main { font-weight: 600; color: var(--ink); }
+  .suggest-item-sub { font-size: 11px; color: var(--ink-3); }
+  .suggest-highlight { color: var(--accent); font-weight: 800; }
+  .suggest-empty { padding: 12px 14px; font-size: 12px; color: var(--ink-3); text-align: center; }
+  .suggest-new { padding: 10px 14px; font-size: 12px; color: var(--accent); cursor: pointer; font-weight: 600; border-top: 1px solid var(--border); }
+  .suggest-new:hover { background: var(--accent-l); }
 </style>
 </head>
 <body>
@@ -534,13 +559,30 @@
       </div>
       <div class="form-group">
         <label class="form-label">紹介元事業所名<span class="required">*</span></label>
-        <input type="text" class="form-input" id="inOrg" placeholder="例：○○居宅介護支援事業所" list="orgList">
-        <datalist id="orgList"></datalist>
+        <div class="suggest-wrap" id="orgWrap">
+          <input type="text" class="form-input suggest-input" id="inOrg"
+            placeholder="事業所名を入力（部分一致で検索）"
+            autocomplete="off"
+            oninput="onOrgInput(this.value)"
+            onkeydown="onSuggestKey(event,'orgDrop')"
+            onfocus="onOrgInput(this.value)"
+            onblur="setTimeout(()=>closeDrop('orgDrop'),200)">
+          <div class="suggest-dropdown" id="orgDrop"></div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">担当者名</label>
-          <input type="text" class="form-input" id="inPerson" placeholder="例：山田 一郎">
+          <div class="suggest-wrap" id="personWrap">
+            <input type="text" class="form-input suggest-input" id="inPerson"
+              placeholder="担当者名を入力（部分一致で検索）"
+              autocomplete="off"
+              oninput="onPersonInput(this.value)"
+              onkeydown="onSuggestKey(event,'personDrop')"
+              onfocus="onPersonInput(this.value)"
+              onblur="setTimeout(()=>closeDrop('personDrop'),200)">
+            <div class="suggest-dropdown" id="personDrop"></div>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">事業所種別<span class="required">*</span></label>
@@ -1852,6 +1894,7 @@ function updateRecentInputList(row){
 
 function clearForm(){
   ['inOrg','inPerson','inPatient','inNote'].forEach(id=>document.getElementById(id).value='');
+  closeDrop('orgDrop'); closeDrop('personDrop');
   document.getElementById('inType').value='';
   document.getElementById('inLocation').value='';
   document.getElementById('inStatus').value='調整中';
@@ -1957,8 +2000,138 @@ function statusBadge(s){
 }
 
 function buildOrgDatalist(){
-  const dl=document.getElementById('orgList');
-  dl.innerHTML=[...new Set(allData.map(d=>d.org))].map(o=>`<option value="${o}">`).join('');
+  // orgMapを構築（事業所→{type, persons[]}）
+  window._orgMap = {};
+  allData.forEach(d=>{
+    if(!d.org) return;
+    if(!_orgMap[d.org]) _orgMap[d.org] = { type: d.type, persons: new Set() };
+    if(d.person) _orgMap[d.org].persons.add(d.person);
+  });
+}
+
+function highlight(text, q){
+  if(!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if(idx < 0) return text;
+  return text.slice(0,idx)
+    + '<span class="suggest-highlight">' + text.slice(idx, idx+q.length) + '</span>'
+    + text.slice(idx+q.length);
+}
+
+function onOrgInput(q){
+  const drop = document.getElementById('orgDrop');
+  const orgs = Object.keys(_orgMap || {});
+  const filtered = q
+    ? orgs.filter(o => o.toLowerCase().includes(q.toLowerCase()))
+    : orgs;
+
+  if(!filtered.length && !q){
+    drop.classList.remove('open'); return;
+  }
+
+  let html = '';
+  filtered.slice(0,20).forEach((o,i) => {
+    const info = _orgMap[o];
+    const persons = [...info.persons].join('・') || '担当者未登録';
+    html += `<div class="suggest-item" data-val="${o}"
+      onmousedown="selectOrg('${o.replace(/'/g,"\'")}')">
+      <div class="suggest-item-main">${highlight(o, q)}</div>
+      <div class="suggest-item-sub">${info.type} ／ ${persons}</div>
+    </div>`;
+  });
+  if(q && !filtered.includes(q)){
+    html += `<div class="suggest-new" onmousedown="selectOrg('${q.replace(/'/g,"\'")}')">
+      ＋「${q}」を新規登録</div>`;
+  }
+  if(!html) html = '<div class="suggest-empty">候補なし</div>';
+  drop.innerHTML = html;
+  drop.classList.add('open');
+}
+
+function selectOrg(val){
+  document.getElementById('inOrg').value = val;
+  closeDrop('orgDrop');
+  // 事業所に紐づく担当者を担当者フィールドに反映
+  onPersonInput('');
+  // 種別も自動セット
+  if(_orgMap[val] && _orgMap[val].type){
+    const sel = document.getElementById('inType');
+    if(sel) sel.value = _orgMap[val].type;
+  }
+}
+
+function onPersonInput(q){
+  const drop = document.getElementById('personDrop');
+  const org  = document.getElementById('inOrg').value.trim();
+
+  // 事業所が入力済みならその担当者を優先、なければ全担当者
+  let persons;
+  if(org && _orgMap && _orgMap[org]){
+    persons = [..._orgMap[org].persons];
+  } else {
+    const all = new Set();
+    Object.values(_orgMap || {}).forEach(v => v.persons.forEach(p => all.add(p)));
+    persons = [...all];
+  }
+
+  const filtered = q
+    ? persons.filter(p => p.toLowerCase().includes(q.toLowerCase()))
+    : persons;
+
+  if(!filtered.length && !q){
+    drop.classList.remove('open'); return;
+  }
+
+  let html = '';
+  filtered.slice(0,15).forEach(p => {
+    html += `<div class="suggest-item" data-val="${p}"
+      onmousedown="selectPerson('${p.replace(/'/g,"\'")}')">
+      <div class="suggest-item-main">${highlight(p, q)}</div>
+    </div>`;
+  });
+  if(q && !filtered.includes(q)){
+    html += `<div class="suggest-new" onmousedown="selectPerson('${q.replace(/'/g,"\'")}')">
+      ＋「${q}」を新規追加</div>`;
+  }
+  if(!html) html = '<div class="suggest-empty">候補なし</div>';
+  drop.innerHTML = html;
+  drop.classList.add('open');
+}
+
+function selectPerson(val){
+  document.getElementById('inPerson').value = val;
+  closeDrop('personDrop');
+}
+
+function closeDrop(id){
+  const el = document.getElementById(id);
+  if(el) el.classList.remove('open');
+}
+
+function onSuggestKey(e, dropId){
+  const drop = document.getElementById(dropId);
+  if(!drop || !drop.classList.contains('open')) return;
+  const items = drop.querySelectorAll('.suggest-item, .suggest-new');
+  let cur = drop.querySelector('.suggest-item.active, .suggest-new.active');
+  let idx = cur ? [...items].indexOf(cur) : -1;
+  if(e.key === 'ArrowDown'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('active');
+    idx = (idx + 1) % items.length;
+    items[idx].classList.add('active');
+    items[idx].scrollIntoView({block:'nearest'});
+  } else if(e.key === 'ArrowUp'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('active');
+    idx = (idx - 1 + items.length) % items.length;
+    items[idx].classList.add('active');
+    items[idx].scrollIntoView({block:'nearest'});
+  } else if(e.key === 'Enter'){
+    e.preventDefault();
+    if(cur) cur.dispatchEvent(new MouseEvent('mousedown'));
+  } else if(e.key === 'Escape'){
+    closeDrop(dropId);
+  }
 }
 
 function buildColumnTable(){
