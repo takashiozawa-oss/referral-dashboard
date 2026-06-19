@@ -1860,10 +1860,41 @@ function saveModal(){
   showToast('更新しました','success');
 }
 
-function pushUpdateToGAS(row){
+// 隠しiframe + フォーム送信でGASにPOSTする（no-corsのfetchより確実）
+function postToGAS(payload, onDone){
   try{
-    fetch(gasUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'update',row}), headers:{'Content-Type':'application/json'}});
-  }catch(e){ console.warn('GAS update failed',e); }
+    let iframe = document.getElementById('_gasSubmitFrame');
+    if(!iframe){
+      iframe = document.createElement('iframe');
+      iframe.name = '_gasSubmitFrame';
+      iframe.id = '_gasSubmitFrame';
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+    }
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = gasUrl;
+    form.target = '_gasSubmitFrame';
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(()=>form.remove(), 1000);
+    if(onDone) setTimeout(onDone, 600);
+  }catch(e){
+    console.warn('GAS送信エラー', e);
+    if(onDone) onDone(e);
+  }
+}
+
+function pushUpdateToGAS(row){
+  postToGAS({action:'update', row});
 }
 
 // ============================================================
@@ -1889,9 +1920,7 @@ function submitReferral(){
     showToast('不成立理由を選択してください','error'); return;
   }
   if(gasUrl){
-    try{
-      fetch(gasUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'add',row}), headers:{'Content-Type':'application/json'}});
-    }catch(e){ showToast('GAS送信に失敗（ローカルに保存）'); }
+    postToGAS({action:'add', row});
   }
   allData.unshift(row);
   updateRecentInputList(row);
@@ -2163,43 +2192,64 @@ function buildColumnTable(){
 }
 
 function buildGasCode(){
-  document.getElementById('gasCode').textContent=`// 紹介元管理ダッシュボード GAS コード v2
+  document.getElementById('gasCode').textContent=`// 紹介元管理ダッシュボード GAS コード v3（フォーム送信対応）
 const SHEET_NAME = '依頼データ';
 const SPREADSHEET_ID = 'ここにスプレッドシートIDを貼り付け';
 
 function doGet(e) {
-  if (e.parameter.action === 'get') return getData();
-  return json({ error: 'Unknown action' });
+  const action = e.parameter.action;
+  const callback = e.parameter.callback;
+  let data;
+  if (action === 'get') {
+    data = getDataObj();
+  } else {
+    data = { error: 'Unknown action' };
+  }
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(data) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return json(data);
 }
 
 function doPost(e) {
-  const p = JSON.parse(e.postData.contents);
-  if (p.action === 'add')    return addRow(p.row);
-  if (p.action === 'update') return updateRow(p.row);
+  // フォーム送信（e.parameter.payload）と直接JSON送信（e.postData.contents）の両方に対応
+  let p;
+  if (e.parameter && e.parameter.payload) {
+    p = JSON.parse(e.parameter.payload);
+  } else if (e.postData && e.postData.contents) {
+    p = JSON.parse(e.postData.contents);
+  } else {
+    return json({ error: 'No payload' });
+  }
+  if (p.action === 'add')    return json(addRowObj(p.row));
+  if (p.action === 'update') return json(updateRowObj(p.row));
   return json({ error: 'Unknown action' });
 }
 
-function getData() {
+function getDataObj() {
   const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
   const rows = sh.getDataRange().getValues();
-  if (rows.length <= 1) return json({ data: [] });
+  if (rows.length <= 1) return { data: [] };
   const headers = rows[0];
-  return json({ data: rows.slice(1).map(r => {
+  return { data: rows.slice(1).map(r => {
     const o = {}; headers.forEach((h, i) => o[h] = r[i]); return o;
-  })});
+  })};
 }
 
-function addRow(row) {
+function addRowObj(row) {
   const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  const uniqueId = new Date().toISOString() + '-' + Math.random().toString(36).slice(2,8);
   sh.appendRow([
     row.date, row.org, row.person, row.type, row.location,
     row.patient, row.status || '調整中', row.reason || '', row.note || '',
-    new Date().toISOString()
+    uniqueId
   ]);
-  return json({ success: true });
+  return { success: true, id: uniqueId };
 }
 
-function updateRow(row) {
+function updateRowObj(row) {
   // 登録日時（J列=index10）でマッチして更新
   const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
   const rows = sh.getDataRange().getValues();
@@ -2210,10 +2260,10 @@ function updateRow(row) {
       sh.getRange(i + 1, 7).setValue(row.status);   // G: ステータス
       sh.getRange(i + 1, 8).setValue(row.reason);   // H: 不成立理由
       sh.getRange(i + 1, 9).setValue(row.note);     // I: 備考
-      return json({ success: true });
+      return { success: true };
     }
   }
-  return json({ error: 'Row not found' });
+  return { error: 'Row not found', searchedId: row.id };
 }
 
 function json(obj) {
