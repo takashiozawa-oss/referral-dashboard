@@ -561,6 +561,32 @@ const PT_TYPES = [
 const SLOT_HALF = 5, WEEKS_PER_MONTH = 2; // 午前/午後 各コマ=5人ぶん
 const SESSIONS = [ {key:'am', label:'午前'}, {key:'pm', label:'午後'} ];
 
+/* その月の中で何回目のその曜日か（1始まり）
+   例: 2026-07-17(金) → 7月の第3金曜 → 3 */
+function nthDowInMonth(date){
+  const d = new Date(date);
+  const day = d.getDate();
+  return Math.ceil(day / 7);
+}
+/* currentMondayから見てその週が奇数週(1,3)か偶数週(2,4)かを曜日ごとに返す
+   dow: 0=月, 1=火, 2=水, 3=木, 4=金 */
+function isOddWeekForDow(monday, dow){
+  const d = new Date(monday);
+  d.setDate(d.getDate() + dow); // その曜日の実際の日付
+  return nthDowInMonth(d) % 2 === 1; // 1,3週目=奇数=true
+}
+/* コマ値（文字列 or {odd,even}）から実際の拠点IDを取得
+   monday: その週の月曜日, dow: 曜日index */
+function resolveSession(val, monday, dow){
+  if(!val) return '';
+  if(typeof val === 'string') return val; // 旧形式・毎週同一拠点
+  if(typeof val === 'object'){
+    if(val.odd && val.even && val.odd === val.even) return val.odd; // 同一拠点
+    return isOddWeekForDow(monday, dow) ? (val.odd||'') : (val.even||'');
+  }
+  return '';
+}
+
 // palette for sites
 const SITE_COLORS = ['#2dd4bf','#60a5fa','#fbbf24','#fb7185','#a78bfa','#34d399'];
 
@@ -637,11 +663,12 @@ async function loadState() {
   state.doctors.forEach(d=>{
     if(!Array.isArray(d.schedule)) return;
     d.schedule = d.schedule.map(s=>{
-      if(s && (s.am!==undefined || s.pm!==undefined)) return { am: s.am||'', pm: s.pm||'' };
-      // old format
+      // 新形式（{am,pm}）はそのまま通過（値が文字列・オブジェクト・空のいずれでもOK）
+      if(s && (s.am!==undefined || s.pm!==undefined)) return s;
+      // 最旧形式 {type,siteId}
       if(!s || s.type==='off' || !s.siteId) return { am:'', pm:'' };
       if(s.type==='full') return { am:s.siteId, pm:s.siteId };
-      if(s.type==='half') return { am:s.siteId, pm:'' }; // 半日=午前のみ
+      if(s.type==='half') return { am:s.siteId, pm:'' };
       return { am:'', pm:'' };
     });
   });
@@ -695,20 +722,43 @@ function fmtRange(monday){
 }
 
 /* ---------- capacity calc ---------- */
+/* コマ値が隔週かどうかを判定 */
+function isAltWeek(val){ return val && typeof val==='object' && val.odd && val.even && val.odd!==val.even; }
+/* コマ値から関わる拠点を全て返す（隔週なら2拠点） */
+function sitesOfSession(val){
+  if(!val) return [];
+  if(typeof val==='string') return [val];
+  const s = new Set();
+  if(val.odd) s.add(val.odd);
+  if(val.even) s.add(val.even);
+  return [...s];
+}
 function docCapacity(doc){
   let slots = 0;
   doc.schedule.forEach(day=>{
-    SESSIONS.forEach(se=>{ if(day[se.key]) slots += SLOT_HALF; });
+    SESSIONS.forEach(se=>{
+      const v = day[se.key];
+      if(!v) return;
+      // 隔週でも「1コマぶん」のキャパは変わらない（月2回はどちらも変わらず）
+      slots += SLOT_HALF;
+    });
   });
-  return slots * WEEKS_PER_MONTH; // per-month capacity (患者上限)
+  return slots * WEEKS_PER_MONTH;
 }
 function docCapacityBySite(doc){
   const m = {};
   doc.schedule.forEach(day=>{
     SESSIONS.forEach(se=>{
-      const sid = day[se.key];
-      if(!sid) return;
-      m[sid] = (m[sid]||0) + SLOT_HALF*WEEKS_PER_MONTH;
+      const v = day[se.key];
+      if(!v) return;
+      if(isAltWeek(v)){
+        // 隔週: 月2回のうち奇数週はodd、偶数週はevenに均等配分
+        m[v.odd] = (m[v.odd]||0) + SLOT_HALF*1; // 月1回ぶん
+        m[v.even] = (m[v.even]||0) + SLOT_HALF*1;
+      } else {
+        const sid = typeof v==='string' ? v : (v.odd||v.even);
+        m[sid] = (m[sid]||0) + SLOT_HALF*WEEKS_PER_MONTH;
+      }
     });
   });
   return m;
@@ -718,18 +768,30 @@ function recordForDoc(weekKey, docId){
 }
 
 /* スロット一覧を医師の勤務形態から生成
-   - 午前午後が同一拠点（終日同拠点）の曜日 → 1日まとめ {key:'i_day', dow:i, site, cap:20, sessions:'day'}
-   - それ以外（午前のみ/午後のみ/午前午後別拠点）→ コマ単位 {key:'i_am', dow:i, site, cap:10, sessions:'am'}
-   cap は2週換算（1コマ=5人×2週=10、終日=10人×2週=20） */
-function docSlots(doc){
+   monday: その週の月曜日（隔週判定に使用）
+   - 午前午後が同一拠点（終日同拠点）の曜日 → 1日まとめ
+   - それ以外 → コマ単位
+   cap は2週換算（隔週コマは月1回ぶん=SLOT_HALF×1） */
+function docSlots(doc, monday){
+  const mon = monday || currentMonday;
   const slots = [];
   doc.schedule.forEach((day,i)=>{
-    const am = day.am, pm = day.pm;
-    if(am && pm && am===pm){
+    const rawAm = day.am, rawPm = day.pm;
+    const am = resolveSession(rawAm, mon, i);
+    const pm = resolveSession(rawPm, mon, i);
+    const amAlt = isAltWeek(rawAm), pmAlt = isAltWeek(rawPm);
+    // 終日同拠点かつどちらも隔週でない or 同パターン隔週
+    if(am && pm && am===pm && !amAlt && !pmAlt){
       slots.push({ key:i+'_day', dow:i, sessions:'day', site:am, cap:SLOT_HALF*2*WEEKS_PER_MONTH });
     } else {
-      if(am) slots.push({ key:i+'_am', dow:i, sessions:'am', site:am, cap:SLOT_HALF*WEEKS_PER_MONTH });
-      if(pm) slots.push({ key:i+'_pm', dow:i, sessions:'pm', site:pm, cap:SLOT_HALF*WEEKS_PER_MONTH });
+      if(am){
+        const cap = amAlt ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
+        slots.push({ key:i+'_am', dow:i, sessions:'am', site:am, cap, altWeek:amAlt });
+      }
+      if(pm){
+        const cap = pmAlt ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
+        slots.push({ key:i+'_pm', dow:i, sessions:'pm', site:pm, cap, altWeek:pmAlt });
+      }
     }
   });
   return slots;
@@ -737,16 +799,16 @@ function docSlots(doc){
 
 /* rec: { slotKey: {facility,home_std,...} }
    医師のスロット定義を参照して、拠点別・曜日別に換算負荷を集計 */
-function convertedLoad(rec, doc){
+function convertedLoad(rec, doc, monday){
   let total = 0;
   const bySite = {};   // siteId -> 換算
   const byDow  = [0,0,0,0,0]; // 曜日index -> 換算
   const byDowSite = {}; // 'i_siteId' -> 換算（曜日×拠点マトリクス用）
   if(doc){
-    const slotMap = {}; docSlots(doc).forEach(s=>slotMap[s.key]=s);
+    const slotMap = {}; docSlots(doc, monday).forEach(s=>slotMap[s.key]=s);
     Object.entries(rec).forEach(([slotKey, counts])=>{
       const slot = slotMap[slotKey];
-      if(!slot) return; // 勤務形態変更で消えたスロットは無視
+      if(!slot) return;
       let s = 0; PT_TYPES.forEach(t=>{ s += (counts[t.key]||0)*t.coef; });
       total += s;
       bySite[slot.site] = (bySite[slot.site]||0) + s;
@@ -755,7 +817,6 @@ function convertedLoad(rec, doc){
       byDowSite[dk] = (byDowSite[dk]||0) + s;
     });
   } else {
-    // doc未指定（後方互換: 旧siteId形式）
     Object.entries(rec).forEach(([siteId, counts])=>{
       let s = 0; PT_TYPES.forEach(t=>{ s += (counts[t.key]||0)*t.coef; });
       bySite[siteId] = (bySite[siteId]||0) + s; total += s;
@@ -783,13 +844,13 @@ function renderKPIs(wk){
   let totalCap=0, totalLoad=0;
   state.doctors.forEach(d=>{
     totalCap += docCapacity(d);
-    totalLoad += convertedLoad(recordForDoc(wk,d.id), d).total;
+    totalLoad += convertedLoad(recordForDoc(wk,d.id), d, currentMonday).total;
   });
   const overall = totalCap>0 ? (totalLoad/totalCap*100) : 0;
   const room = totalCap - totalLoad;
   // count doctors with meaningful free room (>=10 換算枠)
   const freeDocs = state.doctors.filter(d=>{
-    const cap = docCapacity(d); const ld = convertedLoad(recordForDoc(wk,d.id), d).total;
+    const cap = docCapacity(d); const ld = convertedLoad(recordForDoc(wk,d.id), d, currentMonday).total;
     return cap-ld >= 10;
   }).length;
   el.innerHTML = `
@@ -818,18 +879,31 @@ function renderDoctors(wk){
     const cap = docCapacity(d);
     const capBySite = docCapacityBySite(d);
     const rec = recordForDoc(wk,d.id);
-    const load = convertedLoad(rec, d);
+    const load = convertedLoad(rec, d, currentMonday);
     const pct = cap>0 ? (load.total/cap*100) : 0;
     const room = cap - load.total;
     const col = pct>=90 ? 'var(--rose)' : pct>=70 ? 'var(--amber)' : 'var(--green)';
-    // schedule summary
+    // schedule summary（隔週は「1,3週A/2,4週B」と表示）
+    const fmtVal = (val,i,sess)=>{
+      if(!val) return null;
+      if(isAltWeek(val)){
+        const oddN = nthDowInMonth(new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate()+i));
+        const thisWeekSite = isOddWeekForDow(currentMonday,i)?val.odd:val.even;
+        return `${sess}${siteName(val.odd)}(奇)/${siteName(val.even)}(偶)★${siteName(thisWeekSite)}`;
+      }
+      const sid = typeof val==='string'?val:(val.odd||val.even);
+      return `${sess}${siteName(sid)}`;
+    };
     const schedTxt = d.schedule.map((day,i)=>{
-      const am = day.am, pm = day.pm;
+      const am = fmtVal(day.am,i,'午前'), pm = fmtVal(day.pm,i,'午後');
       if(!am && !pm) return null;
-      if(am && pm && am===pm) return `${DOW[i]}:終日(${siteName(am)})`;
-      const parts = [];
-      if(am) parts.push(`午前${siteName(am)}`);
-      if(pm) parts.push(`午後${siteName(pm)}`);
+      const amSite = resolveSession(day.am,currentMonday,i);
+      const pmSite = resolveSession(day.pm,currentMonday,i);
+      if(!isAltWeek(day.am) && !isAltWeek(day.pm) && amSite && pmSite && amSite===pmSite)
+        return `${DOW[i]}:終日(${siteName(amSite)})`;
+      const parts=[];
+      if(am) parts.push(am);
+      if(pm) parts.push(pm);
       return `${DOW[i]}:${parts.join('・')}`;
     }).filter(Boolean).join(' ／ ') || '勤務日なし';
     // per-site bars
@@ -843,10 +917,13 @@ function renderDoctors(wk){
         <div class="site-bar-track"><div class="site-bar-fill" style="width:${p}%;background:${siteColor(sid)}"></div></div>
         <span class="snum">${l.toFixed(1)}/${c}</span></div>`;
     }).join('');
-    // 曜日別キャパ（この医師）
+    // 曜日別キャパ（隔週考慮）
     const dowCap = [0,0,0,0,0];
     d.schedule.forEach((day,i)=>{
-      SESSIONS.forEach(se=>{ if(day[se.key]) dowCap[i] += SLOT_HALF*WEEKS_PER_MONTH; });
+      SESSIONS.forEach(se=>{
+        const v = day[se.key]; if(!v) return;
+        dowCap[i] += isAltWeek(v) ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
+      });
     });
     const dowMini = dowCap.map((c,i)=>{
       const l = load.byDow[i]||0;
@@ -896,10 +973,17 @@ function renderSiteSummary(wk){
     state.doctors.forEach(d=>{
       d.schedule.forEach((day,i)=>{
         SESSIONS.forEach(se=>{
-          if(day[se.key]===site.id) dayCap[i] += SLOT_HALF*WEEKS_PER_MONTH;
+          const v = day[se.key]; if(!v) return;
+          const sites = sitesOfSession(v);
+          sites.forEach(sid=>{
+            if(sid===site.id){
+              // 隔週なら月1回ぶん、毎週なら月2回ぶん
+              dayCap[i] += isAltWeek(v) ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
+            }
+          });
         });
       });
-      const ld = convertedLoad(recordForDoc(wk,d.id), d);
+      const ld = convertedLoad(recordForDoc(wk,d.id), d, currentMonday);
       // byDowSite: 'dow_siteId'
       Object.entries(ld.byDowSite).forEach(([dk,v])=>{
         const [di,sid] = dk.split('_');
@@ -958,7 +1042,7 @@ function renderTrend(){
       tCap += docCapacity(d);
       const cbs = docCapacityBySite(d);
       Object.entries(cbs).forEach(([sid,c])=>sCap[sid]=(sCap[sid]||0)+c);
-      const ld = convertedLoad(recordForDoc(w.key,d.id), d);
+      const ld = convertedLoad(recordForDoc(w.key,d.id), d, w.monday);
       tLoad += ld.total;
       Object.entries(ld.bySite).forEach(([sid,l])=>sLoad[sid]=(sLoad[sid]||0)+l);
     });
@@ -1010,10 +1094,34 @@ function openDoc(id){
   DOW.forEach((dw,i)=>{
     const day = doc ? doc.schedule[i] : {am:'',pm:''};
     const sessionSelect = (sess)=>{
-      const cur = day[sess] || '';
-      const opts = `<option value="">休み</option>` +
-        state.sites.map(st=>`<option value="${st.id}" ${cur===st.id?'selected':''}>${escapeHtml(st.name)}</option>`).join('');
-      return `<select class="sched-sess" data-i="${i}" data-sess="${sess}">${opts}</select>`;
+      const raw = day[sess];
+      // 現在値を特定
+      let curVal = ''; // '' = 休み, 'siteId' = 毎週, 'odd:siteId1|even:siteId2' = 隔週
+      if(raw){
+        if(typeof raw==='string') curVal = raw;
+        else if(isAltWeek(raw)) curVal = 'alt:'+raw.odd+':'+raw.even;
+        else curVal = raw.odd||raw.even||'';
+      }
+      const everyWeekOpts = state.sites.map(st=>
+        `<option value="${st.id}" ${curVal===st.id?'selected':''}>${escapeHtml(st.name)}（毎週）</option>`
+      ).join('');
+      // 隔週の組み合わせ（拠点が2つ以上あるとき）
+      let altOpts = '';
+      if(state.sites.length>=2){
+        state.sites.forEach(s1=>{
+          state.sites.forEach(s2=>{
+            if(s1.id===s2.id) return;
+            const v = 'alt:'+s1.id+':'+s2.id;
+            const sel = curVal===v?'selected':'';
+            altOpts += `<option value="${v}" ${sel}>奇数週:${escapeHtml(s1.name)} / 偶数週:${escapeHtml(s2.name)}</option>`;
+          });
+        });
+      }
+      return `<select class="sched-sess" data-i="${i}" data-sess="${sess}">
+        <option value="">休み</option>
+        ${everyWeekOpts}
+        ${altOpts?'<option disabled>── 隔週パターン ──</option>'+altOpts:''}
+      </select>`;
     };
     grid.innerHTML += `
       <div class="dow">${dw}</div>
@@ -1026,11 +1134,17 @@ function saveDoc(){
   const name = document.getElementById('docNameInput').value.trim();
   if(!name){ alert('医師名を入力してください'); return; }
   const schedule = DOW.map((_,i)=>{
-    const get = sess => {
+    const parseVal = sess => {
       const el = document.querySelector(`.sched-sess[data-i="${i}"][data-sess="${sess}"]`);
-      return el ? el.value : '';
+      if(!el || !el.value) return '';
+      const v = el.value;
+      if(v.startsWith('alt:')){
+        const [,odd,even] = v.split(':');
+        return { odd, even };
+      }
+      return v; // 毎週同一拠点
     };
-    return { am: get('am'), pm: get('pm') };
+    return { am: parseVal('am'), pm: parseVal('pm') };
   });
   if(editingDocId){
     const d = state.doctors.find(x=>x.id===editingDocId);
@@ -1198,8 +1312,20 @@ function delSite(id){
   if(!confirm(`拠点「${s.name}」を削除しますか？\n医師の勤務設定でこの拠点を選んでいる場合は「休み」扱いになります。`)) return;
   state.sites = state.sites.filter(x=>x.id!==id);
   state.doctors.forEach(d=>d.schedule.forEach(day=>{
-    if(day.am===id) day.am='';
-    if(day.pm===id) day.pm='';
+    SESSIONS.forEach(se=>{
+      const v = day[se.key];
+      if(!v) return;
+      if(typeof v==='string' && v===id){ day[se.key]=''; return; }
+      if(typeof v==='object'){
+        if(v.odd===id) v.odd='';
+        if(v.even===id) v.even='';
+        // 両方消えたら休みに
+        if(!v.odd && !v.even) day[se.key]='';
+        // どちらか残ったら毎週その拠点に
+        else if(!v.odd) day[se.key]=v.even;
+        else if(!v.even) day[se.key]=v.odd;
+      }
+    });
   }));
   saveState(); renderSiteList(); render();
 }
