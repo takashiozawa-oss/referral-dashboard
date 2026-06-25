@@ -1237,9 +1237,11 @@ function parseVisitCsv(text){
   // 医師名マッチング（登録医師→byId、未登録→byName）
   const byId={}, byName={};
   Object.entries(counts).forEach(([name,cnt])=>{
-    const doc = state.doctors.find(d=>
-      d.name===name || d.name.replace(/\s/g,'')===name.replace(/\s/g,'')
-    );
+    const doc = state.doctors.find(d=>{
+      const n1 = d.name.replace(/\s/g,'');
+      const n2 = name.replace(/\s/g,'');
+      return n1===n2 || n2.startsWith(n1) || n1.startsWith(n2);
+    });
     if(doc) byId[doc.id]=(byId[doc.id]||0)+cnt;
     else byName[name]=(byName[name]||0)+cnt;
   });
