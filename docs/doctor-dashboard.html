@@ -1263,27 +1263,38 @@ function openVisitImport(){
 
 function onVisitFileSelect(file){
   document.getElementById('visitFileName').textContent=file.name;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const result=parseVisitCsv(e.target.result);
-    if(!result){ document.getElementById('visitPreview').innerHTML=`<div style="color:var(--rose);font-size:12px">CSVの形式が認識できませんでした。「医師名」列が含まれているか確認してください。</div>`; return; }
-    visitParsed=result;
-    const rows=Object.entries(result.byId).map(([docId,cnt])=>{
-      const d=state.doctors.find(x=>x.id===docId);
-      return `<div class="pv-row"><span class="pv-name">${escapeHtml(d?d.name:docId)}</span><span class="pv-cnt">${cnt}件</span></div>`;
-    }).join('');
-    const nameRows=Object.entries(result.byName).map(([name,cnt])=>
-      `<div class="pv-row"><span class="pv-name" style="color:var(--amber)">${escapeHtml(name)} <span style="font-size:10px;color:var(--ink-faint)">往診専従</span></span><span class="pv-cnt">${cnt}件</span></div>`
-    ).join('');
-    const hasAny=Object.keys(result.byId).length>0||Object.keys(result.byName).length>0;
-    document.getElementById('visitPreview').innerHTML=`<div class="csv-preview">
-      ${rows}${nameRows||''}
-      ${!hasAny?'<div style="color:var(--ink-faint);font-size:12px">カウントできた医師がいません</div>':''}
-      <div class="pv-total">CSV合計 ${result.total}件 ／ 登録医師 ${result.matchedCnt}件 ／ 往診専従 ${result.unmatchedCnt}件</div>
-    </div>`;
-    document.getElementById('visitCommit').disabled=!hasAny;
-  };
-  reader.readAsText(file,'UTF-8');
+  // まずUTF-8で試み、「医師名」列が見つからなければShift-JISで再試行
+  function tryParse(encoding, onFail){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const text=e.target.result;
+      const result=parseVisitCsv(text);
+      if(!result && onFail){ onFail(); return; }
+      if(!result){
+        document.getElementById('visitPreview').innerHTML=
+          `<div style="color:var(--rose);font-size:12px">CSVの形式が認識できませんでした。「医師名」列が含まれているか確認してください。</div>`;
+        return;
+      }
+      visitParsed=result;
+      const rows=Object.entries(result.byId).map(([docId,cnt])=>{
+        const d=state.doctors.find(x=>x.id===docId);
+        return `<div class="pv-row"><span class="pv-name">${escapeHtml(d?d.name:docId)}</span><span class="pv-cnt">${cnt}件</span></div>`;
+      }).join('');
+      const nameRows=Object.entries(result.byName).map(([name,cnt])=>
+        `<div class="pv-row"><span class="pv-name" style="color:var(--amber)">${escapeHtml(name)} <span style="font-size:10px;color:var(--ink-faint)">往診専従</span></span><span class="pv-cnt">${cnt}件</span></div>`
+      ).join('');
+      const hasAny=Object.keys(result.byId).length>0||Object.keys(result.byName).length>0;
+      document.getElementById('visitPreview').innerHTML=`<div class="csv-preview">
+        ${rows}${nameRows||''}
+        ${!hasAny?'<div style="color:var(--ink-faint);font-size:12px">カウントできた医師がいません</div>':''}
+        <div class="pv-total">CSV合計 ${result.total}件 ／ 登録医師 ${result.matchedCnt}件 ／ 往診専従 ${result.unmatchedCnt}件</div>
+      </div>`;
+      document.getElementById('visitCommit').disabled=!hasAny;
+    };
+    reader.readAsText(file, encoding);
+  }
+  // UTF-8で試み、失敗したらShift-JISで再試行
+  tryParse('UTF-8', ()=>tryParse('Shift-JIS', null));
 }
 
 function commitVisit(){
