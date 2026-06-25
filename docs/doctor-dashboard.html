@@ -316,6 +316,35 @@
   .empty-state { text-align: center; padding: 50px 20px; color: var(--ink-faint); }
   .empty-state .big { font-size: 40px; margin-bottom: 10px; opacity: .5; }
 
+  /* 往診バッジ（医師カード内） */
+  .visit-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.3);
+    color: var(--amber); font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 20px; margin-top: 5px;
+  }
+  /* 往診実績セクション */
+  .visit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px,1fr)); gap: 14px; }
+  .visit-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+  }
+  .visit-card .vc-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
+  .visit-card .vc-name { font-weight: 700; font-size: 15px; }
+  .visit-card .vc-total {
+    font-family:'Outfit',sans-serif; font-weight:800; font-size:22px; color:var(--amber);
+  }
+  .visit-card .vc-total small { font-size:12px; font-weight:600; color:var(--ink-dim); }
+  svg.visit-trend { width:100%; height:60px; display:block; overflow:visible; }
+  .visit-trend-lbl { display:flex; justify-content:space-between; font-size:10px; color:var(--ink-faint); margin-top:2px; }
+  /* CSVプレビュー */
+  .csv-preview { background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:14px; font-size:12px; }
+  .csv-preview .pv-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid var(--line); }
+  .csv-preview .pv-row:last-child { border-bottom:none; }
+  .csv-preview .pv-name { color:var(--ink); font-weight:600; }
+  .csv-preview .pv-cnt { color:var(--amber); font-weight:700; font-family:'Outfit',sans-serif; }
+  .csv-preview .pv-warn { color:var(--rose); font-size:11px; }
+  .csv-preview .pv-total { color:var(--ink-dim); font-size:11px; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); }
+
   .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
 
   .legend-coef {
@@ -424,6 +453,16 @@
     <h2>稼働率の推移</h2>
   </div>
   <div class="trend-wrap" id="trendWrap"></div>
+
+  <!-- 往診実績 -->
+  <div class="section-head">
+    <h2>往診実績</h2>
+    <div class="toolbar">
+      <button class="btn ghost sm" id="clearVisitBtn">今週の往診データを削除</button>
+      <button class="btn sm" id="importVisitBtn">📂 往診CSVを取り込む</button>
+    </div>
+  </div>
+  <div id="visitSection"></div>
 </div>
 
 <!-- Doctor modal -->
@@ -476,6 +515,31 @@
     </div>
     <div class="modal-actions">
       <button class="btn" id="siteClose">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 往診CSV取り込みモーダル -->
+<div class="overlay" id="visitOverlay">
+  <div class="modal">
+    <h3>往診実績を取り込む</h3>
+    <div class="modal-sub" id="visitModalSub">CSVファイルを選択すると、医師名で自動集計して今週の往診件数として登録します。</div>
+    <div class="field">
+      <label>対象週</label>
+      <div id="visitWeekLabel" style="font-family:'Outfit',sans-serif;font-weight:600;font-size:15px;color:var(--teal);padding:4px 0"></div>
+    </div>
+    <div class="field">
+      <label>CSVファイル（カルテ出力）</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn ghost sm" onclick="document.getElementById('visitCsvFile').click()">📂 ファイルを選択</button>
+        <span id="visitFileName" style="font-size:12px;color:var(--ink-faint)">未選択</span>
+      </div>
+      <input type="file" id="visitCsvFile" accept=".csv,text/csv" style="display:none">
+    </div>
+    <div id="visitPreview" style="margin-top:6px"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="visitCancel">キャンセル</button>
+      <button class="btn" id="visitCommit" disabled>この内容で登録</button>
     </div>
   </div>
 </div>
@@ -594,6 +658,7 @@ let state = {
   sites: [],      // [{id, name}]
   doctors: [],    // [{id, name, schedule:[{am:siteId|'', pm:siteId|''} x5]}]
   records: {},     // { 'YYYY-Www': { docId: { slotKey: { facility, home_std, home_m1, home_wk } } } }
+  visits: {},      // { 'YYYY-Www': { byId:{docId:件数}, byName:{名前:件数} } }  往診実績
   lastSaved: null, // 最終保存時刻(ISO)
   lastExport: null,// 最終バックアップ時刻(ISO)
 };
@@ -659,6 +724,13 @@ async function loadState() {
   if (!state.sites) state.sites = [];
   if (!state.doctors) state.doctors = [];
   if (!state.records) state.records = {};
+  if (!state.visits) state.visits = {};
+  // migrate old visits {wk:{docId:cnt}} -> {wk:{byId:{docId:cnt}, byName:{}}}
+  Object.keys(state.visits).forEach(wk=>{
+    const v = state.visits[wk];
+    if(v && (v.byId !== undefined || v.byName !== undefined)) return; // 新形式
+    state.visits[wk] = { byId: v||{}, byName: {} };
+  });
   // migrate old schedule format {type,siteId} -> {am,pm}
   state.doctors.forEach(d=>{
     if(!Array.isArray(d.schedule)) return;
@@ -837,6 +909,7 @@ function render(){
   renderDoctors(wk);
   renderSiteSummary(wk);
   renderTrend();
+  renderVisits(wk);
 }
 
 function renderKPIs(wk){
@@ -937,7 +1010,9 @@ function renderDoctors(wk){
     return `<div class="doc-card">
       <div class="doc-top">
         <div><div class="doc-name">${escapeHtml(d.name)}</div>
-          <div class="doc-sched">${schedTxt}</div></div>
+          <div class="doc-sched">${schedTxt}</div>
+          ${(()=>{ const v=(state.visits[wk]&&state.visits[wk].byId&&state.visits[wk].byId[d.id])||0; return v>0?`<span class="visit-badge">🚑 往診 ${v}件</span>`:''; })()}
+        </div>
         <div class="doc-actions">
           <button class="icon-btn" title="患者を入力" onclick="openPt('${d.id}')">✎</button>
           <button class="icon-btn" title="前週から患者データをコピー" onclick="copyPrevWeek('${d.id}')">📋</button>
@@ -1079,7 +1154,158 @@ function renderTrend(){
 
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-/* ---------- doctor modal ---------- */
+/* ---------- 往診実績 ---------- */
+function renderVisits(wk){
+  const el = document.getElementById('visitSection');
+  if(!el) return;
+  const weeks=[];
+  for(let i=11;i>=0;i--){
+    const m=new Date(currentMonday); m.setDate(m.getDate()-i*7);
+    weeks.push({ key:isoWeekKey(m), label:isoWeekKey(m).split('-W')[1]+'w' });
+  }
+  const getById=(wkey,docId)=>(state.visits[wkey]&&state.visits[wkey].byId&&state.visits[wkey].byId[docId])||0;
+  const getByName=(wkey,name)=>(state.visits[wkey]&&state.visits[wkey].byName&&state.visits[wkey].byName[name])||0;
+  // 往診専従医師名の全収集
+  const allExtraNames=new Set();
+  weeks.forEach(w=>{ Object.keys((state.visits[w.key]&&state.visits[w.key].byName)||{}).forEach(n=>allExtraNames.add(n)); });
+  const extraNames=[...allExtraNames];
+  const hasAny = state.doctors.some(d=>weeks.some(w=>getById(w.key,d.id)>0))
+               || extraNames.some(n=>weeks.some(w=>getByName(w.key,n)>0));
+  if(!hasAny){
+    el.innerHTML=`<div class="empty-state">往診CSVを取り込むとここに実績が表示されます。<br><span style="font-size:12px">「往診CSVを取り込む」ボタンから週次データを登録してください。</span></div>`;
+    return;
+  }
+  const allDocs=[
+    ...state.doctors.map(d=>({id:d.id, name:d.name, isExtra:false,
+      counts:weeks.map(w=>getById(w.key,d.id)) })),
+    ...extraNames.map(name=>({id:null, name, isExtra:true,
+      counts:weeks.map(w=>getByName(w.key,name)) })),
+  ].filter(d=>d.counts.some(c=>c>0));
+  const maxVal=Math.max(1,...allDocs.map(d=>Math.max(...d.counts)));
+  const cards=allDocs.map(d=>{
+    const total=d.counts[11];
+    const monthTotal=d.counts.slice(-4).reduce((a,b)=>a+b,0);
+    const W=280,H=50,barW=16,gap=5;
+    const bars=d.counts.map((v,i)=>{
+      const x=i*(barW+gap)+2, bh=maxVal>0?Math.max(2,v/maxVal*(H-12)):2;
+      const isNow=i===11, col=isNow?'var(--amber)':'rgba(251,191,36,.3)';
+      return `<rect x="${x}" y="${H-12-bh}" width="${barW}" height="${bh}" fill="${col}" rx="3"/>
+              ${v>0?`<text x="${x+barW/2}" y="${H-14-bh}" text-anchor="middle" fill="${isNow?'var(--amber)':'var(--ink-faint)'}" font-size="9" font-family="Outfit">${v}</text>`:''}`;
+    }).join('');
+    const extraLabel=d.isExtra?`<span style="font-size:10px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:var(--amber);padding:1px 6px;border-radius:10px;margin-left:6px">往診専従</span>`:'';
+    return `<div class="visit-card">
+      <div class="vc-head">
+        <div class="vc-name">${escapeHtml(d.name)}${extraLabel}</div>
+        <div class="vc-total">${total}<small>件</small> <span style="font-size:11px;color:var(--ink-faint)">今週</span></div>
+      </div>
+      <svg class="visit-trend" viewBox="0 0 ${W} ${H}">
+        <line x1="0" y1="${H-11}" x2="${W}" y2="${H-11}" stroke="var(--line)" stroke-width="1"/>
+        ${bars}
+      </svg>
+      <div class="visit-trend-lbl">
+        ${weeks.map((w,i)=>i%3===0||i===11?`<span style="${i===11?'color:var(--amber)':''}">${w.label}</span>`:'<span></span>').join('')}
+      </div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:8px">直近4週計 ${monthTotal}件</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div class="visit-grid">${cards}</div>`;
+}
+
+/* CSVパース・インポート */
+let visitParsed = null; // { docId: 件数, _unmatched:[名前] }
+
+function parseVisitCsv(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2) return null;
+  // ヘッダー行でカラム位置を特定
+  const header = lines[0].split(',');
+  const typeIdx = header.findIndex(h=>h.includes('診療タイプ')||h.includes('タイプ'));
+  const docIdx  = header.findIndex(h=>h.includes('医師'));
+  if(docIdx<0) return null;
+  // 除外タイプ
+  const EXCLUDE = ['なし','報告'];
+  const counts = {}; // 医師名→件数
+  for(let i=1;i<lines.length;i++){
+    const cols = lines[i].split(',');
+    if(typeIdx>=0){
+      const t=(cols[typeIdx]||'').trim();
+      if(EXCLUDE.includes(t)) continue;
+    }
+    const name=(cols[docIdx]||'').trim();
+    if(!name) continue;
+    counts[name]=(counts[name]||0)+1;
+  }
+  // 医師名マッチング（登録医師→byId、未登録→byName）
+  const byId={}, byName={};
+  Object.entries(counts).forEach(([name,cnt])=>{
+    const doc = state.doctors.find(d=>
+      d.name===name || d.name.replace(/\s/g,'')===name.replace(/\s/g,'')
+    );
+    if(doc) byId[doc.id]=(byId[doc.id]||0)+cnt;
+    else byName[name]=(byName[name]||0)+cnt;
+  });
+  return {
+    byId, byName,
+    total: Object.values(counts).reduce((a,b)=>a+b,0),
+    matchedCnt: Object.values(byId).reduce((a,b)=>a+b,0),
+    unmatchedCnt: Object.values(byName).reduce((a,b)=>a+b,0),
+  };
+}
+
+function openVisitImport(){
+  const wk=isoWeekKey(currentMonday);
+  document.getElementById('visitWeekLabel').textContent=wk.replace('-',' ')+' （'+fmtRange(currentMonday)+'）';
+  document.getElementById('visitFileName').textContent='未選択';
+  document.getElementById('visitPreview').innerHTML='';
+  document.getElementById('visitCommit').disabled=true;
+  visitParsed=null;
+  document.getElementById('visitOverlay').classList.add('show');
+}
+
+function onVisitFileSelect(file){
+  document.getElementById('visitFileName').textContent=file.name;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const result=parseVisitCsv(e.target.result);
+    if(!result){ document.getElementById('visitPreview').innerHTML=`<div style="color:var(--rose);font-size:12px">CSVの形式が認識できませんでした。「医師名」列が含まれているか確認してください。</div>`; return; }
+    visitParsed=result;
+    const rows=Object.entries(result.byId).map(([docId,cnt])=>{
+      const d=state.doctors.find(x=>x.id===docId);
+      return `<div class="pv-row"><span class="pv-name">${escapeHtml(d?d.name:docId)}</span><span class="pv-cnt">${cnt}件</span></div>`;
+    }).join('');
+    const nameRows=Object.entries(result.byName).map(([name,cnt])=>
+      `<div class="pv-row"><span class="pv-name" style="color:var(--amber)">${escapeHtml(name)} <span style="font-size:10px;color:var(--ink-faint)">往診専従</span></span><span class="pv-cnt">${cnt}件</span></div>`
+    ).join('');
+    const hasAny=Object.keys(result.byId).length>0||Object.keys(result.byName).length>0;
+    document.getElementById('visitPreview').innerHTML=`<div class="csv-preview">
+      ${rows}${nameRows||''}
+      ${!hasAny?'<div style="color:var(--ink-faint);font-size:12px">カウントできた医師がいません</div>':''}
+      <div class="pv-total">CSV合計 ${result.total}件 ／ 登録医師 ${result.matchedCnt}件 ／ 往診専従 ${result.unmatchedCnt}件</div>
+    </div>`;
+    document.getElementById('visitCommit').disabled=!hasAny;
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function commitVisit(){
+  if(!visitParsed) return;
+  const wk=isoWeekKey(currentMonday);
+  if(!state.visits[wk]) state.visits[wk]={ byId:{}, byName:{} };
+  if(!state.visits[wk].byId) state.visits[wk].byId={};
+  if(!state.visits[wk].byName) state.visits[wk].byName={};
+  Object.entries(visitParsed.byId).forEach(([docId,cnt])=>{ state.visits[wk].byId[docId]=(state.visits[wk].byId[docId]||0)+cnt; });
+  Object.entries(visitParsed.byName).forEach(([name,cnt])=>{ state.visits[wk].byName[name]=(state.visits[wk].byName[name]||0)+cnt; });
+  saveState(); closeOverlays(); render();
+}
+
+function clearVisit(){
+  const wk=isoWeekKey(currentMonday);
+  const v=state.visits[wk];
+  if(!v||( Object.keys(v.byId||{}).length===0 && Object.keys(v.byName||{}).length===0 )){ alert('この週の往診データはありません。'); return; }
+  if(!confirm(`${wk.replace('-',' ')}の往診データを削除しますか？`)) return;
+  delete state.visits[wk];
+  saveState(); render();
+}
 function openDoc(id){
   editingDocId = id || null;
   const doc = id ? state.doctors.find(d=>d.id===id) : null;
@@ -1391,7 +1617,15 @@ document.getElementById('exportBtn2').onclick=exportData;
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
 document.getElementById('importFile').addEventListener('change',e=>{
   if(e.target.files && e.target.files[0]) importData(e.target.files[0]);
-  e.target.value=''; // 同じファイルを連続選択できるようにリセット
+  e.target.value='';
+});
+document.getElementById('importVisitBtn').onclick=openVisitImport;
+document.getElementById('clearVisitBtn').onclick=clearVisit;
+document.getElementById('visitCancel').onclick=closeOverlays;
+document.getElementById('visitCommit').onclick=commitVisit;
+document.getElementById('visitCsvFile').addEventListener('change',e=>{
+  if(e.target.files&&e.target.files[0]) onVisitFileSelect(e.target.files[0]);
+  e.target.value='';
 });
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) closeOverlays(); }));
 window.openDoc=openDoc; window.delDoc=delDoc; window.openPt=openPt; window.delSite=delSite; window.copyPrevWeek=copyPrevWeek;
