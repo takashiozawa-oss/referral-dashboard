@@ -1222,13 +1222,13 @@ function parseVisitCsv(text){
   const docIdx  = header.findIndex(h=>h.includes('医師'));
   if(docIdx<0) return null;
   // 除外タイプ
-  const EXCLUDE = ['なし','報告'];
   const counts = {}; // 医師名→件数
+  // 「往診」という文字を含む診療タイプのみカウント
   for(let i=1;i<lines.length;i++){
     const cols = lines[i].split(',');
     if(typeIdx>=0){
       const t=(cols[typeIdx]||'').trim();
-      if(EXCLUDE.includes(t)) continue;
+      if(!t.includes('往診')) continue; // 往診を含まない行はスキップ
     }
     const name=(cols[docIdx]||'').trim();
     if(!name) continue;
