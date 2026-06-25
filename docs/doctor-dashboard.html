@@ -725,6 +725,10 @@ async function loadState() {
   if (!state.doctors) state.doctors = [];
   if (!state.records) state.records = {};
   if (!state.visits) state.visits = {};
+  migrateState();
+}
+
+function migrateState(){
   // migrate old visits {wk:{docId:cnt}} -> {wk:{byId:{docId:cnt}, byName:{}}}
   Object.keys(state.visits).forEach(wk=>{
     const v = state.visits[wk];
@@ -735,9 +739,7 @@ async function loadState() {
   state.doctors.forEach(d=>{
     if(!Array.isArray(d.schedule)) return;
     d.schedule = d.schedule.map(s=>{
-      // 新形式（{am,pm}）はそのまま通過（値が文字列・オブジェクト・空のいずれでもOK）
       if(s && (s.am!==undefined || s.pm!==undefined)) return s;
-      // 最旧形式 {type,siteId}
       if(!s || s.type==='off' || !s.siteId) return { am:'', pm:'' };
       if(s.type==='full') return { am:s.siteId, pm:s.siteId };
       if(s.type==='half') return { am:s.siteId, pm:'' };
@@ -745,7 +747,6 @@ async function loadState() {
     });
   });
   // migrate old records {docId:{siteId:counts}} -> {docId:{slotKey:counts}}
-  // 旧形式は拠点単位。その拠点の代表スロット（終日優先、なければ最初のコマ）へ寄せる
   Object.keys(state.records).forEach(wk=>{
     const wkRec = state.records[wk];
     Object.keys(wkRec).forEach(docId=>{
@@ -753,16 +754,14 @@ async function loadState() {
       if(!doc){ return; }
       const docRec = wkRec[docId];
       const keys = Object.keys(docRec);
-      // 既に新形式（キーが 'i_xxx'）なら skip
       const looksNew = keys.length===0 || keys.every(k=>/^[0-4]_(day|am|pm)$/.test(k));
       if(looksNew) return;
       const slots = docSlots(doc);
       const newRec = {};
       keys.forEach(siteId=>{
-        // この拠点の代表スロットを探す
         const cand = slots.filter(sl=>sl.site===siteId);
         const target = cand.find(sl=>sl.sessions==='day') || cand[0];
-        if(!target) return; // 該当拠点に勤務スロットがない場合は破棄
+        if(!target) return;
         if(!newRec[target.key]) newRec[target.key] = {};
         PT_TYPES.forEach(t=>{
           if(docRec[siteId][t.key]) newRec[target.key][t.key] = (newRec[target.key][t.key]||0) + docRec[siteId][t.key];
@@ -1574,8 +1573,8 @@ function importData(file){
   reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
-      // 妥当性チェック
-      if(!data || typeof data!=='object' || !('doctors' in data) || !('records' in data)){
+      // 妥当性チェック（doctorsかsitesがあればバックアップと判断）
+      if(!data || typeof data!=='object' || (!('doctors' in data) && !('sites' in data))){
         alert('このファイルはバックアップ形式ではないようです。書き出したJSONファイルを選んでください。');
         return;
       }
@@ -1583,9 +1582,13 @@ function importData(file){
       const wkN = Object.keys(data.records||{}).length;
       if(!confirm(`バックアップを復元します。\n\n医師 ${docN}名 ／ 記録 ${wkN}週ぶん\n\n現在のデータはすべて上書きされます。よろしいですか？`)) return;
       state = data;
+      // 不足フィールドの補完
       if(!state.sites) state.sites=[];
       if(!state.doctors) state.doctors=[];
       if(!state.records) state.records={};
+      if(!state.visits) state.visits={};
+      // マイグレーション実行（旧形式スケジュール・visits対応）
+      migrateState();
       saveState();
       render();
       updateSaveBar();
