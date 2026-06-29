@@ -754,7 +754,7 @@ function migrateState(){
       if(!doc){ return; }
       const docRec = wkRec[docId];
       const keys = Object.keys(docRec);
-      const looksNew = keys.length===0 || keys.every(k=>/^[0-4]_(day|am|pm)$/.test(k));
+      const looksNew = keys.length===0 || keys.every(k=>/^[0-4]_(day|am|pm)(_(odd|even))?$/.test(k));
       if(looksNew) return;
       const slots = docSlots(doc);
       const newRec = {};
@@ -848,20 +848,49 @@ function docSlots(doc, monday){
   const slots = [];
   doc.schedule.forEach((day,i)=>{
     const rawAm = day.am, rawPm = day.pm;
-    const am = resolveSession(rawAm, mon, i);
-    const pm = resolveSession(rawPm, mon, i);
     const amAlt = isAltWeek(rawAm), pmAlt = isAltWeek(rawPm);
-    // 終日同拠点かつどちらも隔週でない or 同パターン隔週
-    if(am && pm && am===pm && !amAlt && !pmAlt){
-      slots.push({ key:i+'_day', dow:i, sessions:'day', site:am, cap:SLOT_HALF*2*WEEKS_PER_MONTH });
-    } else {
-      if(am){
-        const cap = amAlt ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
-        slots.push({ key:i+'_am', dow:i, sessions:'am', site:am, cap, altWeek:amAlt });
+
+    if(amAlt || pmAlt){
+      // 隔週コマが含まれる曜日 → 奇数週・偶数週それぞれをスロットとして生成
+      // 午前
+      if(rawAm){
+        if(amAlt){
+          // 奇数週スロット
+          slots.push({ key:i+'_am_odd', dow:i, sessions:'am', site:rawAm.odd,
+            cap:SLOT_HALF*1, altWeek:true, weekParity:'odd',
+            label:'奇数週' });
+          // 偶数週スロット
+          slots.push({ key:i+'_am_even', dow:i, sessions:'am', site:rawAm.even,
+            cap:SLOT_HALF*1, altWeek:true, weekParity:'even',
+            label:'偶数週' });
+        } else {
+          const site = resolveSession(rawAm, mon, i);
+          slots.push({ key:i+'_am', dow:i, sessions:'am', site, cap:SLOT_HALF*WEEKS_PER_MONTH });
+        }
       }
-      if(pm){
-        const cap = pmAlt ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
-        slots.push({ key:i+'_pm', dow:i, sessions:'pm', site:pm, cap, altWeek:pmAlt });
+      // 午後
+      if(rawPm){
+        if(pmAlt){
+          slots.push({ key:i+'_pm_odd', dow:i, sessions:'pm', site:rawPm.odd,
+            cap:SLOT_HALF*1, altWeek:true, weekParity:'odd',
+            label:'奇数週' });
+          slots.push({ key:i+'_pm_even', dow:i, sessions:'pm', site:rawPm.even,
+            cap:SLOT_HALF*1, altWeek:true, weekParity:'even',
+            label:'偶数週' });
+        } else {
+          const site = resolveSession(rawPm, mon, i);
+          slots.push({ key:i+'_pm', dow:i, sessions:'pm', site, cap:SLOT_HALF*WEEKS_PER_MONTH });
+        }
+      }
+    } else {
+      // 隔週なし（従来通り）
+      const am = resolveSession(rawAm, mon, i);
+      const pm = resolveSession(rawPm, mon, i);
+      if(am && pm && am===pm){
+        slots.push({ key:i+'_day', dow:i, sessions:'day', site:am, cap:SLOT_HALF*2*WEEKS_PER_MONTH });
+      } else {
+        if(am) slots.push({ key:i+'_am', dow:i, sessions:'am', site:am, cap:SLOT_HALF*WEEKS_PER_MONTH });
+        if(pm) slots.push({ key:i+'_pm', dow:i, sessions:'pm', site:pm, cap:SLOT_HALF*WEEKS_PER_MONTH });
       }
     }
   });
@@ -1468,6 +1497,7 @@ function openPt(docId){
     blocks.innerHTML = `<div style="color:var(--rose);font-size:13px">この医師は勤務日が設定されていません。先に勤務形態を設定してください。</div>`;
   } else {
     const sessLabel = { day:'終日', am:'午前', pm:'午後' };
+    const parityLabel = { odd:'奇数週(1,3週)', even:'偶数週(2,4週)' };
     blocks.innerHTML = slots.map(slot=>{
       const counts = rec[slot.key]||{};
       const rows = PT_TYPES.map(t=>`
@@ -1477,7 +1507,7 @@ function openPt(docId){
       return `<div class="pt-site-block">
         <div class="pt-site-name">
           <span class="pt-dow">${DOW[slot.dow]}</span>
-          <span class="pt-sess">${sessLabel[slot.sessions]}</span>
+          <span class="pt-sess">${sessLabel[slot.sessions]}${slot.weekParity ? ' ／ '+parityLabel[slot.weekParity] : ''}</span>
           <span style="color:${siteColor(slot.site)}">${escapeHtml(siteName(slot.site))}</span>
           <span class="badge">上限 ${slot.cap} 換算枠</span>
         </div>
