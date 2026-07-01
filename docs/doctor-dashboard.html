@@ -260,7 +260,7 @@
   .field input:focus, .field select:focus { outline: none; border-color: var(--teal); }
 
   /* schedule grid */
-  .sched-grid { display: grid; grid-template-columns: 48px repeat(2, 1fr); gap: 8px; align-items:center; }
+  .sched-grid { display: grid; grid-template-columns: 48px repeat(2, 1fr) 80px; gap: 8px; align-items:center; }
   .sched-grid .dow { font-size: 13px; font-weight: 600; color: var(--ink-dim); }
   .sched-grid .hd { font-size: 11px; color: var(--ink-faint); text-align:center; padding-bottom:2px;}
   .sched-grid select { padding: 7px 8px; font-size: 13px; }
@@ -469,7 +469,7 @@
 <div class="overlay" id="docOverlay">
   <div class="modal">
     <h3 id="docModalTitle">医師を追加</h3>
-    <div class="modal-sub">勤務形態（曜日×午前・午後×拠点）を設定すると上限が自動計算されます。1コマ=5人ぶん。</div>
+    <div class="modal-sub">勤務形態（曜日×午前・午後×拠点）を設定すると上限が自動計算されます。1コマ=5人ぶん。枠数は空白で自動計算、数値を入れると上書きできます。</div>
     <div class="field">
       <label>医師名</label>
       <input type="text" id="docNameInput" placeholder="例：山田 太郎">
@@ -656,7 +656,7 @@ const SITE_COLORS = ['#2dd4bf','#60a5fa','#fbbf24','#fb7185','#a78bfa','#34d399'
 
 let state = {
   sites: [],      // [{id, name}]
-  doctors: [],    // [{id, name, schedule:[{am:siteId|'', pm:siteId|''} x5]}]
+  doctors: [],    // [{id, name, schedule:[{am:siteId|'', pm:siteId|''} x5], slots:{dow:枠数}}]
   records: {},     // { 'YYYY-Www': { docId: { slotKey: { facility, home_std, home_m1, home_wk } } } }
   visits: {},      // { 'YYYY-Www': { byId:{docId:件数}, byName:{名前:件数} } }  往診実績
   lastSaved: null, // 最終保存時刻(ISO)
@@ -792,6 +792,17 @@ function fmtRange(monday){
   return f(monday)+' – '+f(fri);
 }
 
+/* 医師の曜日ごとの合計枠数（2週換算前）を返す
+   slots上書きがあればそれを、なければ勤務形態から自動計算 */
+function dowCapRaw(doc, dow){
+  if(doc.slots && doc.slots[dow] != null) return Number(doc.slots[dow]);
+  // 自動計算: その曜日のコマ数 × SLOT_HALF
+  const day = doc.schedule[dow];
+  let n = 0;
+  SESSIONS.forEach(se=>{ if(day && day[se.key]) n++; });
+  return n * SLOT_HALF;
+}
+
 /* ---------- capacity calc ---------- */
 /* コマ値が隔週かどうかを判定 */
 function isAltWeek(val){ return val && typeof val==='object' && val.odd && val.even && val.odd!==val.even; }
@@ -805,30 +816,32 @@ function sitesOfSession(val){
   return [...s];
 }
 function docCapacity(doc){
-  let slots = 0;
-  doc.schedule.forEach(day=>{
-    SESSIONS.forEach(se=>{
-      const v = day[se.key];
-      if(!v) return;
-      // 隔週でも「1コマぶん」のキャパは変わらない（月2回はどちらも変わらず）
-      slots += SLOT_HALF;
-    });
+  let total = 0;
+  doc.schedule.forEach((day,i)=>{
+    const raw = dowCapRaw(doc, i);
+    if(raw > 0) total += raw;
   });
-  return slots * WEEKS_PER_MONTH;
+  return total * WEEKS_PER_MONTH;
 }
 function docCapacityBySite(doc){
   const m = {};
-  doc.schedule.forEach(day=>{
+  doc.schedule.forEach((day,i)=>{
+    const raw = dowCapRaw(doc, i);
+    if(raw === 0) return;
+    // その曜日に関わる拠点を特定して按分
+    const sites = [];
+    SESSIONS.forEach(se=>{ sitesOfSession(day[se.key]).forEach(s=>sites.push({s,alt:isAltWeek(day[se.key])})); });
+    if(sites.length === 0) return;
+    // 枠をコマ比率で按分
+    const slotPerSession = raw / SESSIONS.filter(se=>day[se.key]).length;
     SESSIONS.forEach(se=>{
-      const v = day[se.key];
-      if(!v) return;
+      const v = day[se.key]; if(!v) return;
       if(isAltWeek(v)){
-        // 隔週: 月2回のうち奇数週はodd、偶数週はevenに均等配分
-        m[v.odd] = (m[v.odd]||0) + SLOT_HALF*1; // 月1回ぶん
-        m[v.even] = (m[v.even]||0) + SLOT_HALF*1;
+        m[v.odd]  = (m[v.odd]||0)  + slotPerSession * 0.5 * WEEKS_PER_MONTH / WEEKS_PER_MONTH;
+        m[v.even] = (m[v.even]||0) + slotPerSession * 0.5 * WEEKS_PER_MONTH / WEEKS_PER_MONTH;
       } else {
         const sid = typeof v==='string' ? v : (v.odd||v.even);
-        m[sid] = (m[sid]||0) + SLOT_HALF*WEEKS_PER_MONTH;
+        m[sid] = (m[sid]||0) + slotPerSession * WEEKS_PER_MONTH;
       }
     });
   });
@@ -849,48 +862,45 @@ function docSlots(doc, monday){
   doc.schedule.forEach((day,i)=>{
     const rawAm = day.am, rawPm = day.pm;
     const amAlt = isAltWeek(rawAm), pmAlt = isAltWeek(rawPm);
+    const raw = dowCapRaw(doc, i); // その曜日の合計枠数（上書きまたは自動計算）
+    const nSessions = (rawAm?1:0) + (rawPm?1:0);
+    const capPerSession = nSessions > 0 ? raw / nSessions : 0; // 1コマあたりの枠数
 
     if(amAlt || pmAlt){
-      // 隔週コマが含まれる曜日 → 奇数週・偶数週それぞれをスロットとして生成
-      // 午前
       if(rawAm){
         if(amAlt){
-          // 奇数週スロット
-          slots.push({ key:i+'_am_odd', dow:i, sessions:'am', site:rawAm.odd,
-            cap:SLOT_HALF*1, altWeek:true, weekParity:'odd',
-            label:'奇数週' });
-          // 偶数週スロット
+          slots.push({ key:i+'_am_odd',  dow:i, sessions:'am', site:rawAm.odd,
+            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
+            altWeek:true, weekParity:'odd',  label:'奇数週' });
           slots.push({ key:i+'_am_even', dow:i, sessions:'am', site:rawAm.even,
-            cap:SLOT_HALF*1, altWeek:true, weekParity:'even',
-            label:'偶数週' });
+            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
+            altWeek:true, weekParity:'even', label:'偶数週' });
         } else {
           const site = resolveSession(rawAm, mon, i);
-          slots.push({ key:i+'_am', dow:i, sessions:'am', site, cap:SLOT_HALF*WEEKS_PER_MONTH });
+          slots.push({ key:i+'_am', dow:i, sessions:'am', site, cap:capPerSession*WEEKS_PER_MONTH });
         }
       }
-      // 午後
       if(rawPm){
         if(pmAlt){
-          slots.push({ key:i+'_pm_odd', dow:i, sessions:'pm', site:rawPm.odd,
-            cap:SLOT_HALF*1, altWeek:true, weekParity:'odd',
-            label:'奇数週' });
+          slots.push({ key:i+'_pm_odd',  dow:i, sessions:'pm', site:rawPm.odd,
+            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
+            altWeek:true, weekParity:'odd',  label:'奇数週' });
           slots.push({ key:i+'_pm_even', dow:i, sessions:'pm', site:rawPm.even,
-            cap:SLOT_HALF*1, altWeek:true, weekParity:'even',
-            label:'偶数週' });
+            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
+            altWeek:true, weekParity:'even', label:'偶数週' });
         } else {
           const site = resolveSession(rawPm, mon, i);
-          slots.push({ key:i+'_pm', dow:i, sessions:'pm', site, cap:SLOT_HALF*WEEKS_PER_MONTH });
+          slots.push({ key:i+'_pm', dow:i, sessions:'pm', site, cap:capPerSession*WEEKS_PER_MONTH });
         }
       }
     } else {
-      // 隔週なし（従来通り）
       const am = resolveSession(rawAm, mon, i);
       const pm = resolveSession(rawPm, mon, i);
       if(am && pm && am===pm){
-        slots.push({ key:i+'_day', dow:i, sessions:'day', site:am, cap:SLOT_HALF*2*WEEKS_PER_MONTH });
+        slots.push({ key:i+'_day', dow:i, sessions:'day', site:am, cap:raw*WEEKS_PER_MONTH });
       } else {
-        if(am) slots.push({ key:i+'_am', dow:i, sessions:'am', site:am, cap:SLOT_HALF*WEEKS_PER_MONTH });
-        if(pm) slots.push({ key:i+'_pm', dow:i, sessions:'pm', site:pm, cap:SLOT_HALF*WEEKS_PER_MONTH });
+        if(am) slots.push({ key:i+'_am', dow:i, sessions:'am', site:am, cap:capPerSession*WEEKS_PER_MONTH });
+        if(pm) slots.push({ key:i+'_pm', dow:i, sessions:'pm', site:pm, cap:capPerSession*WEEKS_PER_MONTH });
       }
     }
   });
@@ -1018,14 +1028,9 @@ function renderDoctors(wk){
         <div class="site-bar-track"><div class="site-bar-fill" style="width:${p}%;background:${siteColor(sid)}"></div></div>
         <span class="snum">${l.toFixed(1)}/${c}</span></div>`;
     }).join('');
-    // 曜日別キャパ（隔週考慮）
+    // 曜日別キャパ（dowCapRaw使用）
     const dowCap = [0,0,0,0,0];
-    d.schedule.forEach((day,i)=>{
-      SESSIONS.forEach(se=>{
-        const v = day[se.key]; if(!v) return;
-        dowCap[i] += isAltWeek(v) ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
-      });
-    });
+    d.schedule.forEach((day,i)=>{ dowCap[i] = dowCapRaw(d,i) * WEEKS_PER_MONTH; });
     const dowMini = dowCap.map((c,i)=>{
       const l = load.byDow[i]||0;
       const p = c>0?Math.min(100,l/c*100):0;
@@ -1075,13 +1080,15 @@ function renderSiteSummary(wk){
     const dayLoad = [0,0,0,0,0];
     state.doctors.forEach(d=>{
       d.schedule.forEach((day,i)=>{
+        const raw = dowCapRaw(d, i);
+        if(raw === 0) return;
+        const nSess = SESSIONS.filter(se=>day[se.key]).length;
+        const capPerSess = nSess > 0 ? raw / nSess : 0;
         SESSIONS.forEach(se=>{
           const v = day[se.key]; if(!v) return;
-          const sites = sitesOfSession(v);
-          sites.forEach(sid=>{
+          sitesOfSession(v).forEach(sid=>{
             if(sid===site.id){
-              // 隔週なら月1回ぶん、毎週なら月2回ぶん
-              dayCap[i] += isAltWeek(v) ? SLOT_HALF*1 : SLOT_HALF*WEEKS_PER_MONTH;
+              dayCap[i] += isAltWeek(v) ? capPerSess * 0.5 : capPerSess * WEEKS_PER_MONTH;
             }
           });
         });
@@ -1353,7 +1360,7 @@ function openDoc(id){
   document.getElementById('docModalTitle').textContent = id?'勤務形態を編集':'医師を追加';
   document.getElementById('docNameInput').value = doc?doc.name:'';
   const grid = document.getElementById('schedGrid');
-  grid.innerHTML = `<div></div><div class="hd">午前</div><div class="hd">午後</div>`;
+  grid.innerHTML = `<div></div><div class="hd">午前</div><div class="hd">午後</div><div class="hd">1日の枠数</div>`;
   if(state.sites.length===0){
     grid.innerHTML += `<div style="grid-column:1/-1;color:var(--rose);font-size:12px;padding:8px 0">
       先に「拠点設定」で拠点を登録してください。</div>`;
@@ -1390,10 +1397,19 @@ function openDoc(id){
         ${altOpts?'<option disabled>── 隔週パターン ──</option>'+altOpts:''}
       </select>`;
     };
+    // 自動計算値（デフォルト表示用）
+    const nSess = (day.am?1:0) + (day.pm?1:0);
+    const autoSlots = nSess * SLOT_HALF;
+    const slotVal = (doc && doc.slots && doc.slots[i] != null) ? doc.slots[i] : '';
     grid.innerHTML += `
       <div class="dow">${dw}</div>
       ${sessionSelect('am')}
-      ${sessionSelect('pm')}`;
+      ${sessionSelect('pm')}
+      <input type="number" class="sched-slots" data-i="${i}" min="0" max="30" step="1"
+        value="${slotVal}" placeholder="${autoSlots}"
+        style="background:var(--bg);border:1px solid var(--line);color:var(--ink);
+               padding:7px 8px;border-radius:9px;font-size:13px;width:100%;text-align:center;"
+        title="空白=自動(${autoSlots}枠)">`;
   });
   document.getElementById('docOverlay').classList.add('show');
 }
@@ -1413,11 +1429,21 @@ function saveDoc(){
     };
     return { am: parseVal('am'), pm: parseVal('pm') };
   });
+  // 枠数の上書き設定を収集（空白 or 自動値と同じなら保存しない）
+  const slots = {};
+  DOW.forEach((_,i)=>{
+    const el = document.querySelector(`.sched-slots[data-i="${i}"]`);
+    if(!el || el.value==='') return;
+    const v = parseInt(el.value);
+    if(!isNaN(v) && v >= 0) slots[i] = v;
+  });
   if(editingDocId){
     const d = state.doctors.find(x=>x.id===editingDocId);
     d.name = name; d.schedule = schedule;
+    d.slots = Object.keys(slots).length > 0 ? slots : undefined;
   } else {
-    state.doctors.push({ id:'d'+Date.now(), name, schedule });
+    state.doctors.push({ id:'d'+Date.now(), name, schedule,
+      slots: Object.keys(slots).length > 0 ? slots : undefined });
   }
   saveState(); closeOverlays(); render();
 }
