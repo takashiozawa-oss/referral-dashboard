@@ -475,6 +475,11 @@
       <input type="text" id="docNameInput" placeholder="例：山田 太郎">
     </div>
     <div class="field">
+      <label>適用開始週</label>
+      <select id="docApplyFrom" style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:10px 12px;border-radius:9px;font-size:13px;font-family:inherit;"></select>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:4px">選択した週以降に新しい設定が適用されます。それより前の週は変更されません。</div>
+    </div>
+    <div class="field">
       <label>勤務形態（月〜金）</label>
       <div class="sched-grid" id="schedGrid">
         <div></div><div class="hd">区分</div><div class="hd">拠点</div>
@@ -656,7 +661,7 @@ const SITE_COLORS = ['#2dd4bf','#60a5fa','#fbbf24','#fb7185','#a78bfa','#34d399'
 
 let state = {
   sites: [],      // [{id, name}]
-  doctors: [],    // [{id, name, schedule:[{am:siteId|'', pm:siteId|''} x5], slots:{dow:枠数}}]
+  doctors: [],    // [{id, name, schedule, slots, history:[{from:'YYYY-Www', schedule, slots}]}]
   records: {},     // { 'YYYY-Www': { docId: { slotKey: { facility, home_std, home_m1, home_wk } } } }
   visits: {},      // { 'YYYY-Www': { byId:{docId:件数}, byName:{名前:件数} } }  往診実績
   lastSaved: null, // 最終保存時刻(ISO)
@@ -735,7 +740,12 @@ function migrateState(){
     if(v && (v.byId !== undefined || v.byName !== undefined)) return; // 新形式
     state.visits[wk] = { byId: v||{}, byName: {} };
   });
-  // migrate old schedule format {type,siteId} -> {am,pm}
+  // 既存医師にhistoryがなければ現行設定から補完
+  state.doctors.forEach(d=>{
+    if(!d.history || d.history.length===0){
+      d.history = [{ from:'2020-W01', schedule:d.schedule, slots:d.slots }];
+    }
+  });
   state.doctors.forEach(d=>{
     if(!Array.isArray(d.schedule)) return;
     d.schedule = d.schedule.map(s=>{
@@ -790,6 +800,31 @@ function fmtRange(monday){
   const fri = new Date(monday); fri.setDate(monday.getDate()+4);
   const f = dt => (dt.getMonth()+1)+'/'+dt.getDate();
   return f(monday)+' – '+f(fri);
+}
+
+/* 週キーの大小比較（ISO週キーは文字列比較で正しく動く） */
+function wkLte(a, b){ return a <= b; }
+
+/* その週に有効な医師設定（schedule/slots）を返す
+   history があればその週以前の最新エントリを使用、なければ現行設定を返す */
+function docConfigAt(doc, weekKey){
+  if(!doc.history || doc.history.length === 0){
+    return { schedule: doc.schedule, slots: doc.slots };
+  }
+  // from <= weekKey の中で最大（最新）のエントリ
+  const valid = doc.history
+    .filter(h => wkLte(h.from, weekKey))
+    .sort((a,b) => a.from < b.from ? 1 : -1);
+  if(valid.length > 0) return { schedule: valid[0].schedule, slots: valid[0].slots };
+  // 全エントリより前の週 → 一番古い設定を使用
+  const oldest = doc.history.slice().sort((a,b)=>a.from<b.from?-1:1)[0];
+  return { schedule: oldest.schedule, slots: oldest.slots };
+}
+
+/* 医師オブジェクトに週時点の設定を合成して返す（計算用の一時オブジェクト） */
+function docAt(doc, weekKey){
+  const cfg = docConfigAt(doc, weekKey);
+  return Object.assign({}, doc, { schedule: cfg.schedule, slots: cfg.slots });
 }
 
 /* 医師の曜日ごとの合計枠数（2週換算前）を返す
@@ -954,14 +989,15 @@ function renderKPIs(wk){
   const el = document.getElementById('kpis');
   let totalCap=0, totalLoad=0;
   state.doctors.forEach(d=>{
-    totalCap += docCapacity(d);
-    totalLoad += convertedLoad(recordForDoc(wk,d.id), d, currentMonday).total;
+    const da0 = docAt(d,wk);
+    totalCap += docCapacity(da0);
+    totalLoad += convertedLoad(recordForDoc(wk,d.id), da0, currentMonday).total;
   });
   const overall = totalCap>0 ? (totalLoad/totalCap*100) : 0;
   const room = totalCap - totalLoad;
   // count doctors with meaningful free room (>=10 換算枠)
   const freeDocs = state.doctors.filter(d=>{
-    const cap = docCapacity(d); const ld = convertedLoad(recordForDoc(wk,d.id), d, currentMonday).total;
+    const da1 = docAt(d,wk); const cap = docCapacity(da1); const ld = convertedLoad(recordForDoc(wk,d.id), da1, currentMonday).total;
     return cap-ld >= 10;
   }).length;
   el.innerHTML = `
@@ -987,10 +1023,11 @@ function renderDoctors(wk){
     return;
   }
   grid.innerHTML = state.doctors.map(d=>{
-    const cap = docCapacity(d);
-    const capBySite = docCapacityBySite(d);
+    const dCur = docAt(d,wk);
+    const cap = docCapacity(dCur);
+    const capBySite = docCapacityBySite(dCur);
     const rec = recordForDoc(wk,d.id);
-    const load = convertedLoad(rec, d, currentMonday);
+    const load = convertedLoad(rec, dCur, currentMonday);
     const pct = cap>0 ? (load.total/cap*100) : 0;
     const room = cap - load.total;
     const col = pct>=90 ? 'var(--rose)' : pct>=70 ? 'var(--amber)' : 'var(--green)';
@@ -1005,7 +1042,7 @@ function renderDoctors(wk){
       const sid = typeof val==='string'?val:(val.odd||val.even);
       return `${sess}${siteName(sid)}`;
     };
-    const schedTxt = d.schedule.map((day,i)=>{
+    const schedTxt = dCur.schedule.map((day,i)=>{
       const am = fmtVal(day.am,i,'午前'), pm = fmtVal(day.pm,i,'午後');
       if(!am && !pm) return null;
       const amSite = resolveSession(day.am,currentMonday,i);
@@ -1030,7 +1067,7 @@ function renderDoctors(wk){
     }).join('');
     // 曜日別キャパ（dowCapRaw使用）
     const dowCap = [0,0,0,0,0];
-    d.schedule.forEach((day,i)=>{ dowCap[i] = dowCapRaw(d,i) * WEEKS_PER_MONTH; });
+    dCur.schedule.forEach((day,i)=>{ dowCap[i] = dowCapRaw(dCur,i) * WEEKS_PER_MONTH; });
     const dowMini = dowCap.map((c,i)=>{
       const l = load.byDow[i]||0;
       const p = c>0?Math.min(100,l/c*100):0;
@@ -1079,8 +1116,9 @@ function renderSiteSummary(wk){
     const dayCap = [0,0,0,0,0];
     const dayLoad = [0,0,0,0,0];
     state.doctors.forEach(d=>{
-      d.schedule.forEach((day,i)=>{
-        const raw = dowCapRaw(d, i);
+      const dw = docAt(d, wk);
+      dw.schedule.forEach((day,i)=>{
+        const raw = dowCapRaw(dw, i);
         if(raw === 0) return;
         const nSess = SESSIONS.filter(se=>day[se.key]).length;
         const capPerSess = nSess > 0 ? raw / nSess : 0;
@@ -1093,7 +1131,7 @@ function renderSiteSummary(wk){
           });
         });
       });
-      const ld = convertedLoad(recordForDoc(wk,d.id), d, currentMonday);
+      const ld = convertedLoad(recordForDoc(wk,d.id), docAt(d,wk), currentMonday);
       // byDowSite: 'dow_siteId'
       Object.entries(ld.byDowSite).forEach(([dk,v])=>{
         const [di,sid] = dk.split('_');
@@ -1149,10 +1187,11 @@ function renderTrend(){
     let tCap=0,tLoad=0;
     const sCap={}, sLoad={};
     state.doctors.forEach(d=>{
-      tCap += docCapacity(d);
-      const cbs = docCapacityBySite(d);
+      const dw = docAt(d, w.key);
+      tCap += docCapacity(dw);
+      const cbs = docCapacityBySite(dw);
       Object.entries(cbs).forEach(([sid,c])=>sCap[sid]=(sCap[sid]||0)+c);
-      const ld = convertedLoad(recordForDoc(w.key,d.id), d, w.monday);
+      const ld = convertedLoad(recordForDoc(w.key,d.id), docAt(d,w.key), w.monday);
       tLoad += ld.total;
       Object.entries(ld.bySite).forEach(([sid,l])=>sLoad[sid]=(sLoad[sid]||0)+l);
     });
@@ -1357,6 +1396,9 @@ function clearVisit(){
 function openDoc(id){
   editingDocId = id || null;
   const doc = id ? state.doctors.find(d=>d.id===id) : null;
+  // 表示中の週の設定を初期値として使用
+  const wk = isoWeekKey(currentMonday);
+  const cfg = doc ? docConfigAt(doc, wk) : null;
   document.getElementById('docModalTitle').textContent = id?'勤務形態を編集':'医師を追加';
   document.getElementById('docNameInput').value = doc?doc.name:'';
   const grid = document.getElementById('schedGrid');
@@ -1366,7 +1408,7 @@ function openDoc(id){
       先に「拠点設定」で拠点を登録してください。</div>`;
   }
   DOW.forEach((dw,i)=>{
-    const day = doc ? doc.schedule[i] : {am:'',pm:''};
+    const day = cfg ? (cfg.schedule[i]||{am:'',pm:''}) : {am:'',pm:''};
     const sessionSelect = (sess)=>{
       const raw = day[sess];
       // 現在値を特定
@@ -1400,7 +1442,7 @@ function openDoc(id){
     // 自動計算値（デフォルト表示用）
     const nSess = (day.am?1:0) + (day.pm?1:0);
     const autoSlots = nSess * SLOT_HALF;
-    const slotVal = (doc && doc.slots && doc.slots[i] != null) ? doc.slots[i] : '';
+    const slotVal = (cfg && cfg.slots && cfg.slots[i] != null) ? cfg.slots[i] : '';
     grid.innerHTML += `
       <div class="dow">${dw}</div>
       ${sessionSelect('am')}
@@ -1411,6 +1453,17 @@ function openDoc(id){
                padding:7px 8px;border-radius:9px;font-size:13px;width:100%;text-align:center;"
         title="空白=自動(${autoSlots}枠)">`;
   });
+  // 適用開始週の選択（今週 + 未来8週のプルダウン）
+  const applyWeeks = [];
+  for(let i=0;i<9;i++){
+    const m=new Date(currentMonday); m.setDate(m.getDate()+i*7);
+    const wk=isoWeekKey(m);
+    applyWeeks.push({wk, label:(i===0?'今週 ':i===1?'来週 ':'')+wk.replace('-W',' W')+`（${fmtRange(m)}）`});
+  }
+  const applyField = document.getElementById('docApplyFrom');
+  if(applyField){
+    applyField.innerHTML = applyWeeks.map((w,i)=>`<option value="${w.wk}">${w.label}</option>`).join('');
+  }
   document.getElementById('docOverlay').classList.add('show');
 }
 function saveDoc(){
@@ -1425,11 +1478,10 @@ function saveDoc(){
         const [,odd,even] = v.split(':');
         return { odd, even };
       }
-      return v; // 毎週同一拠点
+      return v;
     };
     return { am: parseVal('am'), pm: parseVal('pm') };
   });
-  // 枠数の上書き設定を収集（空白 or 自動値と同じなら保存しない）
   const slots = {};
   DOW.forEach((_,i)=>{
     const el = document.querySelector(`.sched-slots[data-i="${i}"]`);
@@ -1437,13 +1489,32 @@ function saveDoc(){
     const v = parseInt(el.value);
     if(!isNaN(v) && v >= 0) slots[i] = v;
   });
+  const slotsObj = Object.keys(slots).length > 0 ? slots : undefined;
+  // 適用開始週を取得
+  const applyFrom = document.getElementById('docApplyFrom')?.value || isoWeekKey(currentMonday);
+  const curWk = isoWeekKey(currentMonday);
+
   if(editingDocId){
     const d = state.doctors.find(x=>x.id===editingDocId);
-    d.name = name; d.schedule = schedule;
-    d.slots = Object.keys(slots).length > 0 ? slots : undefined;
+    d.name = name;
+    // 履歴を更新
+    if(!d.history) d.history = [];
+    // 同じfromが既にあれば上書き、なければ追加
+    const existing = d.history.findIndex(h=>h.from===applyFrom);
+    const entry = { from:applyFrom, schedule, slots:slotsObj };
+    if(existing>=0) d.history[existing] = entry;
+    else d.history.push(entry);
+    // 今週以降の最新設定をd.schedule/d.slotsにも反映（現行設定として保持）
+    const latestFrom = d.history
+      .filter(h=>h.from<=curWk).sort((a,b)=>a.from<b.from?1:-1)[0]
+      || d.history.sort((a,b)=>a.from<b.from?-1:1)[0];
+    if(latestFrom){ d.schedule=latestFrom.schedule; d.slots=latestFrom.slots; }
   } else {
-    state.doctors.push({ id:'d'+Date.now(), name, schedule,
-      slots: Object.keys(slots).length > 0 ? slots : undefined });
+    // 新規追加: historyに今週エントリを作成
+    state.doctors.push({
+      id:'d'+Date.now(), name, schedule, slots:slotsObj,
+      history:[{ from:applyFrom, schedule, slots:slotsObj }]
+    });
   }
   saveState(); closeOverlays(); render();
 }
@@ -1514,9 +1585,10 @@ function openPt(docId){
   ptDocId = docId;
   const doc = state.doctors.find(d=>d.id===docId);
   const wk = isoWeekKey(currentMonday);
+  const docW = docAt(doc, wk); // その週の設定を使用
   document.getElementById('ptModalTitle').textContent = `受け持ち患者の入力 — ${doc.name}`;
   document.getElementById('ptModalSub').textContent = `${wk.replace('-',' ')}（${fmtRange(currentMonday)}）の受け持ちを勤務コマごとに入力。終日同一拠点の日は1日まとめ、半日や拠点が変わる日はコマ別。`;
-  const slots = docSlots(doc);
+  const slots = docSlots(docW);
   const rec = recordForDoc(wk, docId);
   const blocks = document.getElementById('ptSiteBlocks');
   if(slots.length===0){
@@ -1548,7 +1620,9 @@ function openPt(docId){
 }
 function updatePtSums(){
   const doc = state.doctors.find(d=>d.id===ptDocId);
-  docSlots(doc).forEach(slot=>{
+  const wk = isoWeekKey(currentMonday);
+  const docW = docAt(doc, wk);
+  docSlots(docW).forEach(slot=>{
     let conv=0;
     PT_TYPES.forEach(t=>{
       const el = document.querySelector(`input[data-slot="${slot.key}"][data-key="${t.key}"]`);
