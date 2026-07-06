@@ -1313,8 +1313,11 @@ function parseVisitCsv(text){
   const byId={}, byName={};
   Object.entries(counts).forEach(([name,cnt])=>{
     const doc = state.doctors.find(d=>{
-      const n1 = d.name.replace(/\s/g,'');
-      const n2 = name.replace(/\s/g,'');
+      // 異体字・旧字体を正規化してから照合（例: 﨑→崎、髙→高、濵→浜 など）
+      const VARIANT_MAP = {'﨑':'崎','髙':'高','濵':'浜','濱':'浜','邉':'辺','邊':'辺','渕':'淵','檜':'桧','栁':'柳','曾':'曽','廣':'広','寬':'寛','德':'徳','國':'国','實':'実','眞':'真','齊':'斉','齋':'斎','澤':'沢','瀨':'瀬','彌':'弥'};
+      const norm = s => s.replace(/./g, c=>VARIANT_MAP[c]||c);
+      const n1 = norm(d.name.replace(/\s/g,''));
+      const n2 = norm(name.replace(/\s/g,''));
       return n1===n2 || n2.startsWith(n1) || n1.startsWith(n2);
     });
     if(doc) byId[doc.id]=(byId[doc.id]||0)+cnt;
