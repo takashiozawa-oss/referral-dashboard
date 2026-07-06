@@ -1297,31 +1297,30 @@ function parseVisitCsv(text){
   const docIdx  = header.findIndex(h=>h.includes('医師'));
   if(docIdx<0) return null;
   // 除外タイプ
-  const counts = {}; // 医師名→件数
+  const VARIANT_MAP = {'﨑':'崎','髙':'高','濵':'浜','濱':'浜','邉':'辺','邊':'辺','渕':'淵','檜':'桧','栁':'柳','曾':'曽','廣':'広','寬':'寛','德':'徳','國':'国','實':'実','眞':'真','齊':'斉','齋':'斎','澤':'沢','瀨':'瀬','彌':'弥'};
+  const normName = s => s.replace(/\s/g,'').replace(/./g, c=>VARIANT_MAP[c]||c);
+  const counts = {}; // 正規化済み医師名→件数
   // 「往診」という文字を含む診療タイプのみカウント
   for(let i=1;i<lines.length;i++){
     const cols = lines[i].split(',');
     if(typeIdx>=0){
       const t=(cols[typeIdx]||'').trim();
-      if(!t.includes('往診')) continue; // 往診を含まない行はスキップ
+      if(!t.includes('往診')) continue;
     }
     const name=(cols[docIdx]||'').trim();
     if(!name) continue;
-    counts[name]=(counts[name]||0)+1;
+    const key = normName(name); // 正規化した名前をキーにする
+    counts[key]=(counts[key]||0)+1;
   }
   // 医師名マッチング（登録医師→byId、未登録→byName）
   const byId={}, byName={};
-  Object.entries(counts).forEach(([name,cnt])=>{
+  Object.entries(counts).forEach(([normKey,cnt])=>{
     const doc = state.doctors.find(d=>{
-      // 異体字・旧字体を正規化してから照合（例: 﨑→崎、髙→高、濵→浜 など）
-      const VARIANT_MAP = {'﨑':'崎','髙':'高','濵':'浜','濱':'浜','邉':'辺','邊':'辺','渕':'淵','檜':'桧','栁':'柳','曾':'曽','廣':'広','寬':'寛','德':'徳','國':'国','實':'実','眞':'真','齊':'斉','齋':'斎','澤':'沢','瀨':'瀬','彌':'弥'};
-      const norm = s => s.replace(/./g, c=>VARIANT_MAP[c]||c);
-      const n1 = norm(d.name.replace(/\s/g,''));
-      const n2 = norm(name.replace(/\s/g,''));
-      return n1===n2 || n2.startsWith(n1) || n1.startsWith(n2);
+      const n1 = normName(d.name);
+      return n1===normKey || normKey.startsWith(n1) || n1.startsWith(normKey);
     });
     if(doc) byId[doc.id]=(byId[doc.id]||0)+cnt;
-    else byName[name]=(byName[name]||0)+cnt;
+    else byName[normKey]=(byName[normKey]||0)+cnt;
   });
   return {
     byId, byName,
