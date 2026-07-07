@@ -663,7 +663,7 @@ let state = {
   sites: [],      // [{id, name}]
   doctors: [],    // [{id, name, schedule, slots, history:[{from:'YYYY-Www', schedule, slots}]}]
   records: {},     // { 'YYYY-Www': { docId: { slotKey: { facility, home_std, home_m1, home_wk } } } }
-  visits: {},      // { 'YYYY-Www': { byId:{docId:件数}, byName:{名前:件数} } }  往診実績
+  visits: {},      // { 'YYYY-Www': { byId:{docId:{normal,night,midnight}}, byName:{名前:{normal,night,midnight}} } }
   lastSaved: null, // 最終保存時刻(ISO)
   lastExport: null,// 最終バックアップ時刻(ISO)
 };
@@ -734,11 +734,26 @@ async function loadState() {
 }
 
 function migrateState(){
-  // migrate old visits {wk:{docId:cnt}} -> {wk:{byId:{docId:cnt}, byName:{}}}
+  // migrate old visits -> 新種別構造 {normal,night,midnight}
   Object.keys(state.visits).forEach(wk=>{
     const v = state.visits[wk];
-    if(v && (v.byId !== undefined || v.byName !== undefined)) return; // 新形式
-    state.visits[wk] = { byId: v||{}, byName: {} };
+    if(!v) return;
+    // 新形式判定: byId内の値がオブジェクト({normal,...})かどうか
+    const isNew = v.byId && Object.values(v.byId).length > 0
+      && typeof Object.values(v.byId)[0] === 'object';
+    if(isNew) return;
+    // 旧形式1: {byId:{docId:件数}, byName:{名前:件数}}
+    if(v.byId !== undefined){
+      const newById={}, newByName={};
+      Object.entries(v.byId||{}).forEach(([k,c])=>{ newById[k]={normal:c,night:0,midnight:0}; });
+      Object.entries(v.byName||{}).forEach(([k,c])=>{ newByName[k]={normal:c,night:0,midnight:0}; });
+      state.visits[wk]={byId:newById,byName:newByName};
+    } else {
+      // 旧形式2: {docId:件数}
+      const newById={};
+      Object.entries(v).forEach(([k,c])=>{ newById[k]={normal:c,night:0,midnight:0}; });
+      state.visits[wk]={byId:newById,byName:{}};
+    }
   });
   // 既存医師にhistoryがなければ現行設定から補完
   state.doctors.forEach(d=>{
@@ -1081,7 +1096,14 @@ function renderDoctors(wk){
       <div class="doc-top">
         <div><div class="doc-name">${escapeHtml(d.name)}</div>
           <div class="doc-sched">${schedTxt}</div>
-          ${(()=>{ const v=(state.visits[wk]&&state.visits[wk].byId&&state.visits[wk].byId[d.id])||0; return v>0?`<span class="visit-badge">🚑 往診 ${v}件</span>`:''; })()}
+          ${(()=>{
+            const cnts=(state.visits[wk]&&state.visits[wk].byId&&state.visits[wk].byId[d.id])||null;
+            if(!cnts) return '';
+            const total=(cnts.normal||0)+(cnts.night||0)+(cnts.midnight||0);
+            if(total===0) return '';
+            const detail=[cnts.normal?`往診${cnts.normal}`:'', cnts.night?`夜間${cnts.night}`:'', cnts.midnight?`深夜${cnts.midnight}`:''].filter(Boolean).join('/');
+            return `<span class="visit-badge">🚑 ${total}件 <span style="font-size:9px;opacity:.8">${detail}</span></span>`;
+          })()}
         </div>
         <div class="doc-actions">
           <button class="icon-btn" title="患者を入力" onclick="openPt('${d.id}')">✎</button>
@@ -1237,43 +1259,57 @@ function renderVisits(wk){
     const m=new Date(currentMonday); m.setDate(m.getDate()-i*7);
     weeks.push({ key:isoWeekKey(m), label:isoWeekKey(m).split('-W')[1]+'w' });
   }
-  const getById=(wkey,docId)=>(state.visits[wkey]&&state.visits[wkey].byId&&state.visits[wkey].byId[docId])||0;
-  const getByName=(wkey,name)=>(state.visits[wkey]&&state.visits[wkey].byName&&state.visits[wkey].byName[name])||0;
-  // 往診専従医師名の全収集
+  const totalOf=o=>o?(o.normal||0)+(o.night||0)+(o.midnight||0):0;
+  const getById=(wkey,docId)=>(state.visits[wkey]&&state.visits[wkey].byId&&state.visits[wkey].byId[docId])||null;
+  const getByName=(wkey,name)=>(state.visits[wkey]&&state.visits[wkey].byName&&state.visits[wkey].byName[name])||null;
   const allExtraNames=new Set();
   weeks.forEach(w=>{ Object.keys((state.visits[w.key]&&state.visits[w.key].byName)||{}).forEach(n=>allExtraNames.add(n)); });
   const extraNames=[...allExtraNames];
-  const hasAny = state.doctors.some(d=>weeks.some(w=>getById(w.key,d.id)>0))
-               || extraNames.some(n=>weeks.some(w=>getByName(w.key,n)>0));
+  const hasAny = state.doctors.some(d=>weeks.some(w=>totalOf(getById(w.key,d.id))>0))
+               || extraNames.some(n=>weeks.some(w=>totalOf(getByName(w.key,n))>0));
   if(!hasAny){
     el.innerHTML=`<div class="empty-state">往診CSVを取り込むとここに実績が表示されます。<br><span style="font-size:12px">「往診CSVを取り込む」ボタンから週次データを登録してください。</span></div>`;
     return;
   }
   const allDocs=[
     ...state.doctors.map(d=>({id:d.id, name:d.name, isExtra:false,
-      counts:weeks.map(w=>getById(w.key,d.id)) })),
+      counts:weeks.map(w=>getById(w.key,d.id)||{normal:0,night:0,midnight:0}) })),
     ...extraNames.map(name=>({id:null, name, isExtra:true,
-      counts:weeks.map(w=>getByName(w.key,name)) })),
-  ].filter(d=>d.counts.some(c=>c>0));
-  const maxVal=Math.max(1,...allDocs.map(d=>Math.max(...d.counts)));
+      counts:weeks.map(w=>getByName(w.key,name)||{normal:0,night:0,midnight:0}) })),
+  ].filter(d=>d.counts.some(c=>totalOf(c)>0));
+  const maxVal=Math.max(1,...allDocs.map(d=>Math.max(...d.counts.map(totalOf))));
+  const legend=`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:var(--ink-dim)">
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:2px;background:#60a5fa;display:inline-block"></span>往診（通常）</span>
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:2px;background:#fbbf24;display:inline-block"></span>夜間往診</span>
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:2px;background:#fb7185;display:inline-block"></span>深夜往診</span>
+  </div>`;
   const cards=allDocs.map(d=>{
-    const total=d.counts[11];
-    const monthTotal=d.counts.slice(-4).reduce((a,b)=>a+b,0);
-    const W=280,H=50,barW=16,gap=5;
-    const bars=d.counts.map((v,i)=>{
-      const x=i*(barW+gap)+2, bh=maxVal>0?Math.max(2,v/maxVal*(H-12)):2;
-      const isNow=i===11, col=isNow?'var(--amber)':'rgba(251,191,36,.3)';
-      return `<rect x="${x}" y="${H-12-bh}" width="${barW}" height="${bh}" fill="${col}" rx="3"/>
-              ${v>0?`<text x="${x+barW/2}" y="${H-14-bh}" text-anchor="middle" fill="${isNow?'var(--amber)':'var(--ink-faint)'}" font-size="9" font-family="Outfit">${v}</text>`:''}`;
+    const cur=d.counts[11]; const total=totalOf(cur);
+    const monthTotal=d.counts.slice(-4).reduce((a,c)=>a+totalOf(c),0);
+    const W=280,H=60,barW=16,gap=5;
+    const bars=d.counts.map((c,i)=>{
+      const tot=totalOf(c); if(tot===0) return '';
+      const x=i*(barW+gap)+2; const isNow=i===11; const al=isNow?'':'70';
+      const hn=maxVal>0?Math.max(2,c.normal/maxVal*(H-14)):2;
+      const hni=maxVal>0?(c.night/maxVal*(H-14)):0;
+      const hm=maxVal>0?(c.midnight/maxVal*(H-14)):0;
+      let y=H-14-hn-hni-hm; const rects=[];
+      if(hm>0.5){ rects.push(`<rect x="${x}" y="${y.toFixed(1)}" width="${barW}" height="${hm.toFixed(1)}" fill="#fb7185${al}" rx="2"/>`); y+=hm; }
+      if(hni>0.5){ rects.push(`<rect x="${x}" y="${y.toFixed(1)}" width="${barW}" height="${hni.toFixed(1)}" fill="#fbbf24${al}" rx="2"/>`); y+=hni; }
+      rects.push(`<rect x="${x}" y="${y.toFixed(1)}" width="${barW}" height="${hn.toFixed(1)}" fill="#60a5fa${al}" rx="2"/>`);
+      const lbl=isNow&&tot>0?`<text x="${x+barW/2}" y="${(H-14-totalOf(c)/maxVal*(H-14)-2).toFixed(1)}" text-anchor="middle" fill="var(--ink-faint)" font-size="9" font-family="Outfit">${tot}</text>`:'';
+      return rects.join('')+lbl;
     }).join('');
     const extraLabel=d.isExtra?`<span style="font-size:10px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:var(--amber);padding:1px 6px;border-radius:10px;margin-left:6px">往診専従</span>`:'';
+    const curDetail=[cur.normal?`往診${cur.normal}`:'',cur.night?`夜間${cur.night}`:'',cur.midnight?`深夜${cur.midnight}`:''].filter(Boolean).join(' / ');
     return `<div class="visit-card">
       <div class="vc-head">
         <div class="vc-name">${escapeHtml(d.name)}${extraLabel}</div>
-        <div class="vc-total">${total}<small>件</small> <span style="font-size:11px;color:var(--ink-faint)">今週</span></div>
+        <div><div class="vc-total">${total}<small>件</small> <span style="font-size:11px;color:var(--ink-faint)">今週</span></div>
+        ${curDetail?`<div style="font-size:10px;color:var(--ink-faint);margin-top:2px">${curDetail}</div>`:''}</div>
       </div>
-      <svg class="visit-trend" viewBox="0 0 ${W} ${H}">
-        <line x1="0" y1="${H-11}" x2="${W}" y2="${H-11}" stroke="var(--line)" stroke-width="1"/>
+      <svg class="visit-trend" viewBox="0 0 ${W} ${H}" style="height:70px">
+        <line x1="0" y1="${H-13}" x2="${W}" y2="${H-13}" stroke="var(--line)" stroke-width="1"/>
         ${bars}
       </svg>
       <div class="visit-trend-lbl">
@@ -1282,7 +1318,7 @@ function renderVisits(wk){
       <div style="font-size:11px;color:var(--ink-faint);margin-top:8px">直近4週計 ${monthTotal}件</div>
     </div>`;
   }).join('');
-  el.innerHTML=`<div class="visit-grid">${cards}</div>`;
+  el.innerHTML=legend+`<div class="visit-grid">${cards}</div>`;
 }
 
 /* CSVパース・インポート */
@@ -1299,34 +1335,48 @@ function parseVisitCsv(text){
   // 除外タイプ
   const VARIANT_MAP = {'﨑':'崎','髙':'高','濵':'浜','濱':'浜','邉':'辺','邊':'辺','渕':'淵','檜':'桧','栁':'柳','曾':'曽','廣':'広','寬':'寛','德':'徳','國':'国','實':'実','眞':'真','齊':'斉','齋':'斎','澤':'沢','瀨':'瀬','彌':'弥'};
   const normName = s => s.replace(/\s/g,'').replace(/./g, c=>VARIANT_MAP[c]||c);
-  const counts = {}; // 正規化済み医師名→件数
-  // 「往診」という文字を含む診療タイプのみカウント
+  function visitKind(t){
+    if(t.includes('深夜往診')) return 'midnight';
+    if(t.includes('夜間往診')) return 'night';
+    if(t.includes('往診'))     return 'normal';
+    return null;
+  }
+  const counts = {}; // 正規化済み医師名→{normal,night,midnight}
   for(let i=1;i<lines.length;i++){
     const cols = lines[i].split(',');
-    if(typeIdx>=0){
-      const t=(cols[typeIdx]||'').trim();
-      if(!t.includes('往診')) continue;
-    }
+    const t = typeIdx>=0 ? (cols[typeIdx]||'').trim() : '往診';
+    const kind = visitKind(t);
+    if(!kind) continue;
     const name=(cols[docIdx]||'').trim();
     if(!name) continue;
-    const key = normName(name); // 正規化した名前をキーにする
-    counts[key]=(counts[key]||0)+1;
+    const key = normName(name);
+    if(!counts[key]) counts[key]={normal:0,night:0,midnight:0};
+    counts[key][kind]++;
   }
-  // 医師名マッチング（登録医師→byId、未登録→byName）
+  const totalOf = o => (o.normal||0)+(o.night||0)+(o.midnight||0);
   const byId={}, byName={};
-  Object.entries(counts).forEach(([normKey,cnt])=>{
+  Object.entries(counts).forEach(([normKey,cnts])=>{
     const doc = state.doctors.find(d=>{
       const n1 = normName(d.name);
       return n1===normKey || normKey.startsWith(n1) || n1.startsWith(normKey);
     });
-    if(doc) byId[doc.id]=(byId[doc.id]||0)+cnt;
-    else byName[normKey]=(byName[normKey]||0)+cnt;
+    if(doc){
+      if(!byId[doc.id]) byId[doc.id]={normal:0,night:0,midnight:0};
+      byId[doc.id].normal   += cnts.normal;
+      byId[doc.id].night    += cnts.night;
+      byId[doc.id].midnight += cnts.midnight;
+    } else {
+      if(!byName[normKey]) byName[normKey]={normal:0,night:0,midnight:0};
+      byName[normKey].normal   += cnts.normal;
+      byName[normKey].night    += cnts.night;
+      byName[normKey].midnight += cnts.midnight;
+    }
   });
   return {
     byId, byName,
-    total: Object.values(counts).reduce((a,b)=>a+b,0),
-    matchedCnt: Object.values(byId).reduce((a,b)=>a+b,0),
-    unmatchedCnt: Object.values(byName).reduce((a,b)=>a+b,0),
+    total: Object.values(counts).reduce((a,o)=>a+totalOf(o),0),
+    matchedCnt:   Object.values(byId).reduce((a,o)=>a+totalOf(o),0),
+    unmatchedCnt: Object.values(byName).reduce((a,o)=>a+totalOf(o),0),
   };
 }
 
@@ -1355,12 +1405,14 @@ function onVisitFileSelect(file){
         return;
       }
       visitParsed=result;
-      const rows=Object.entries(result.byId).map(([docId,cnt])=>{
+      const totalOf=o=>(o.normal||0)+(o.night||0)+(o.midnight||0);
+      const fmtCnts=o=>`往診 ${o.normal||0} / 夜間 ${o.night||0} / 深夜 ${o.midnight||0}`;
+      const rows=Object.entries(result.byId).map(([docId,cnts])=>{
         const d=state.doctors.find(x=>x.id===docId);
-        return `<div class="pv-row"><span class="pv-name">${escapeHtml(d?d.name:docId)}</span><span class="pv-cnt">${cnt}件</span></div>`;
+        return `<div class="pv-row"><span class="pv-name">${escapeHtml(d?d.name:docId)}</span><span class="pv-cnt">${totalOf(cnts)}件 <span style="font-size:10px;color:var(--ink-faint)">(${fmtCnts(cnts)})</span></span></div>`;
       }).join('');
-      const nameRows=Object.entries(result.byName).map(([name,cnt])=>
-        `<div class="pv-row"><span class="pv-name" style="color:var(--amber)">${escapeHtml(name)} <span style="font-size:10px;color:var(--ink-faint)">往診専従</span></span><span class="pv-cnt">${cnt}件</span></div>`
+      const nameRows=Object.entries(result.byName).map(([name,cnts])=>
+        `<div class="pv-row"><span class="pv-name" style="color:var(--amber)">${escapeHtml(name)} <span style="font-size:10px;color:var(--ink-faint)">往診専従</span></span><span class="pv-cnt">${totalOf(cnts)}件 <span style="font-size:10px;color:var(--ink-faint)">(${fmtCnts(cnts)})</span></span></div>`
       ).join('');
       const hasAny=Object.keys(result.byId).length>0||Object.keys(result.byName).length>0;
       document.getElementById('visitPreview').innerHTML=`<div class="csv-preview">
@@ -1382,8 +1434,16 @@ function commitVisit(){
   if(!state.visits[wk]) state.visits[wk]={ byId:{}, byName:{} };
   if(!state.visits[wk].byId) state.visits[wk].byId={};
   if(!state.visits[wk].byName) state.visits[wk].byName={};
-  Object.entries(visitParsed.byId).forEach(([docId,cnt])=>{ state.visits[wk].byId[docId]=(state.visits[wk].byId[docId]||0)+cnt; });
-  Object.entries(visitParsed.byName).forEach(([name,cnt])=>{ state.visits[wk].byName[name]=(state.visits[wk].byName[name]||0)+cnt; });
+  const mergeKinds=(dest,src)=>{
+    if(!dest) return Object.assign({normal:0,night:0,midnight:0},src);
+    return {normal:(dest.normal||0)+(src.normal||0), night:(dest.night||0)+(src.night||0), midnight:(dest.midnight||0)+(src.midnight||0)};
+  };
+  Object.entries(visitParsed.byId).forEach(([docId,cnts])=>{
+    state.visits[wk].byId[docId]=mergeKinds(state.visits[wk].byId[docId],cnts);
+  });
+  Object.entries(visitParsed.byName).forEach(([name,cnts])=>{
+    state.visits[wk].byName[name]=mergeKinds(state.visits[wk].byName[name],cnts);
+  });
   saveState(); closeOverlays(); render();
 }
 
