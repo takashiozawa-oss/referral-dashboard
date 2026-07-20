@@ -50,8 +50,8 @@
     --panel-2: #222d3a;
     --line: #2e3a48;
     --ink: #e8edf2;
-    --ink-dim: #8b9bad;
-    --ink-faint: #5d6b7a;
+    --ink-dim: #c8d4e0;
+    --ink-faint: #9aafc2;
     --teal: #2dd4bf;
     --teal-deep: #0f766e;
     --amber: #fbbf24;
@@ -1189,7 +1189,6 @@ function renderSiteSummary(wk){
 
 function renderTrend(){
   const wrap = document.getElementById('trendWrap');
-  // gather last 12 weeks ending at current
   const weeks = [];
   for(let i=11;i>=0;i--){
     const m = new Date(currentMonday); m.setDate(m.getDate()-i*7);
@@ -1200,9 +1199,10 @@ function renderTrend(){
     wrap.innerHTML = `<div class="empty-state">データを入力すると、ここに稼働率の推移が表示されます。</div>`;
     return;
   }
-  // overall + per-site series
-  const series = {}; // siteId -> [pct...]
+  // 週ごとのデータを収集
+  const series = {}; // siteId -> [pct|null...]
   const overall = [];
+  const weekData = []; // ツールチップ用の詳細データ
   weeks.forEach(w=>{
     let tCap=0,tLoad=0;
     const sCap={}, sLoad={};
@@ -1215,11 +1215,16 @@ function renderTrend(){
       tLoad += ld.total;
       Object.entries(ld.bySite).forEach(([sid,l])=>sLoad[sid]=(sLoad[sid]||0)+l);
     });
-    overall.push(tCap>0?tLoad/tCap*100:0);
+    const ovPct = tCap>0?tLoad/tCap*100:0;
+    overall.push(ovPct);
+    const siteDetail = {};
     state.sites.forEach(s=>{
+      const pct = sCap[s.id]>0?(sLoad[s.id]||0)/sCap[s.id]*100:null;
       if(!series[s.id]) series[s.id]=[];
-      series[s.id].push(sCap[s.id]>0?(sLoad[s.id]||0)/sCap[s.id]*100:null);
+      series[s.id].push(pct);
+      siteDetail[s.id] = { pct, load:sLoad[s.id]||0, cap:sCap[s.id]||0 };
     });
+    weekData.push({ key:w.key, ovPct, tLoad, tCap, siteDetail });
   });
 
   const W=1240,H=240,padL=36,padR=16,padT=16,padB=28;
@@ -1229,7 +1234,6 @@ function renderTrend(){
   const grid = [0,25,50,75,100].map(v=>`
     <line x1="${padL}" y1="${yat(v)}" x2="${W-padR}" y2="${yat(v)}" stroke="var(--line)" stroke-dasharray="3 4"/>
     <text x="${padL-6}" y="${yat(v)+3}" text-anchor="end">${v}</text>`).join('');
-  const xlabels = weeks.map((w,i)=> i%2===0?`<text x="${xat(i)}" y="${H-8}" text-anchor="middle">${w.key.split('-W')[1]}w</text>`:'').join('');
   function path(arr,color,width){
     let dpath='', started=false;
     arr.forEach((v,i)=>{ if(v===null){started=false;return;}
@@ -1238,12 +1242,74 @@ function renderTrend(){
   }
   const sitePaths = state.sites.map(s=>path(series[s.id],siteColor(s.id),1.8)).join('');
   const overallDots = overall.map((v,i)=>`<circle cx="${xat(i)}" cy="${yat(v)}" r="3" fill="var(--ink)"/>`).join('');
+  // ツールチップ用の透明ヒットエリア（縦帯）
+  const hitAreas = weeks.map((w,i)=>{
+    const x = xat(i); const w2 = plotW/(weeks.length-1)/2;
+    return `<rect x="${x-w2}" y="${padT}" width="${w2*2}" height="${plotH}"
+      fill="transparent" data-wi="${i}"
+      class="trend-hit"
+      onmouseenter="showTrendTip(event,${i})"
+      onmouseleave="hideTrendTip()"/>`;
+  }).join('');
   const legend = `<div class="trend-legend">
     <span class="lg"><i style="background:var(--ink)"></i>全体</span>
     ${state.sites.map(s=>`<span class="lg"><i style="background:${siteColor(s.id)}"></i>${escapeHtml(s.name)}</span>`).join('')}
   </div>`;
-  wrap.innerHTML = legend + `<svg class="trend" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    ${grid}${sitePaths}${path(overall,'var(--ink)',2.4)}${overallDots}</svg>`;
+  // ツールチップ要素（hidden）
+  const tooltip = `<div id="trendTooltip" style="
+    display:none;position:absolute;pointer-events:none;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 14px;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);
+    min-width:160px;z-index:50;"></div>`;
+  wrap.innerHTML = legend + `<div style="position:relative">` + tooltip +
+    `<svg class="trend" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" id="trendSvg">
+      ${grid}${sitePaths}${path(overall,'var(--ink)',2.4)}${overallDots}${hitAreas}</svg></div>`;
+
+  // ツールチップデータをwindowに保持
+  window._trendWeekData = weekData;
+  window._trendXat = xat;
+  window._trendW = W;
+}
+
+function showTrendTip(evt, wi){
+  const tip = document.getElementById('trendTooltip');
+  if(!tip || !window._trendWeekData) return;
+  const d = window._trendWeekData[wi];
+  if(!d) return;
+  const wLabel = d.key.replace('-W',' W');
+  const siteRows = state.sites.map(s=>{
+    const sd = d.siteDetail[s.id];
+    if(!sd||sd.cap===0) return '';
+    const pct = sd.pct!=null?sd.pct.toFixed(0)+'%':'—';
+    const col = sd.pct>=90?'var(--rose)':sd.pct>=70?'var(--amber)':'var(--green)';
+    return `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:4px">
+      <span style="color:${siteColor(s.id)}">${escapeHtml(s.name)}</span>
+      <span style="color:${col};font-weight:700">${pct}</span></div>`;
+  }).join('');
+  const ovCol = d.ovPct>=90?'var(--rose)':d.ovPct>=70?'var(--amber)':'var(--green)';
+  tip.innerHTML = `<div style="font-weight:700;margin-bottom:6px;color:var(--ink)">${wLabel}</div>
+    ${siteRows}
+    <div style="display:flex;justify-content:space-between;gap:16px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">
+      <span style="color:var(--ink-dim)">全体</span>
+      <span style="color:${ovCol};font-weight:700">${d.ovPct.toFixed(0)}%</span></div>
+    <div style="font-size:10px;color:var(--ink-faint);margin-top:4px">換算 ${d.tLoad.toFixed(1)} / ${d.tCap.toFixed(0)} 枠</div>`;
+  // 位置をSVGの相対座標で決定
+  const svg = document.getElementById('trendSvg');
+  if(!svg) return;
+  const rect = svg.getBoundingClientRect();
+  const svgW = rect.width;
+  const scale = svgW / (window._trendW||1240);
+  const xPx = window._trendXat(wi) * scale;
+  const tipW = 180;
+  const left = xPx + (xPx + tipW + 10 > svgW ? -(tipW+10) : 10);
+  tip.style.display = 'block';
+  tip.style.left = left + 'px';
+  tip.style.top = '10px';
+}
+
+function hideTrendTip(){
+  const tip = document.getElementById('trendTooltip');
+  if(tip) tip.style.display='none';
 }
 
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
