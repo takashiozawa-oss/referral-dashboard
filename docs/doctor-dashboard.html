@@ -917,14 +917,14 @@ function docSlots(doc, monday){
     const capPerSession = nSessions > 0 ? raw / nSessions : 0; // 1コマあたりの枠数
 
     if(amAlt || pmAlt){
+      // 隔週コマの月あたりキャパ = raw ÷ 2（奇数週・偶数週で半分ずつ）
+      const capAltSession = Math.round(raw / 2);
       if(rawAm){
         if(amAlt){
           slots.push({ key:i+'_am_odd',  dow:i, sessions:'am', site:rawAm.odd,
-            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
-            altWeek:true, weekParity:'odd',  label:'奇数週' });
+            cap:capAltSession, altWeek:true, weekParity:'odd',  label:'奇数週' });
           slots.push({ key:i+'_am_even', dow:i, sessions:'am', site:rawAm.even,
-            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
-            altWeek:true, weekParity:'even', label:'偶数週' });
+            cap:capAltSession, altWeek:true, weekParity:'even', label:'偶数週' });
         } else {
           const site = resolveSession(rawAm, mon, i);
           slots.push({ key:i+'_am', dow:i, sessions:'am', site, cap:capPerSession*WEEKS_PER_MONTH });
@@ -933,11 +933,9 @@ function docSlots(doc, monday){
       if(rawPm){
         if(pmAlt){
           slots.push({ key:i+'_pm_odd',  dow:i, sessions:'pm', site:rawPm.odd,
-            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
-            altWeek:true, weekParity:'odd',  label:'奇数週' });
+            cap:capAltSession, altWeek:true, weekParity:'odd',  label:'奇数週' });
           slots.push({ key:i+'_pm_even', dow:i, sessions:'pm', site:rawPm.even,
-            cap:Math.round(capPerSession * 0.5) * WEEKS_PER_MONTH / WEEKS_PER_MONTH,
-            altWeek:true, weekParity:'even', label:'偶数週' });
+            cap:capAltSession, altWeek:true, weekParity:'even', label:'偶数週' });
         } else {
           const site = resolveSession(rawPm, mon, i);
           slots.push({ key:i+'_pm', dow:i, sessions:'pm', site, cap:capPerSession*WEEKS_PER_MONTH });
