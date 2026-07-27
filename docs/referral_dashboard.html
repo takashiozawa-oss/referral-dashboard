@@ -603,6 +603,21 @@
           <input type="text" class="form-input" id="inPatient" placeholder="田中 様">
         </div>
         <div class="form-group">
+          <label class="form-label">主治医</label>
+          <div class="suggest-wrap">
+            <input type="text" class="form-input suggest-input" id="inDoctor"
+              placeholder="担当医師名（後から変更可）"
+              autocomplete="off"
+              oninput="onDoctorInput(this.value)"
+              onkeydown="onSuggestKey(event,'doctorDrop')"
+              onfocus="onDoctorInput(this.value)"
+              onblur="setTimeout(()=>closeDrop('doctorDrop'),200)">
+            <div class="suggest-dropdown" id="doctorDrop"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">初期ステータス</label>
           <select class="form-select" id="inStatus">
             <option value="調整中">調整中</option>
@@ -622,6 +637,47 @@
           <option>死亡</option>
           <option>その他</option>
         </select>
+      </div>
+      <div style="background:var(--surface);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:10px;">📣 関連営業担当（任意・不明の場合は「不明」）</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">営業担当1</label>
+            <div class="suggest-wrap">
+              <input type="text" class="form-input suggest-input" id="inSales1"
+                placeholder="担当者名または「不明」"
+                autocomplete="off"
+                oninput="onSalesInput(this.value,'salesDrop1')"
+                onkeydown="onSuggestKey(event,'salesDrop1')"
+                onfocus="onSalesInput(this.value,'salesDrop1')"
+                onblur="setTimeout(()=>closeDrop('salesDrop1'),200)">
+              <div class="suggest-dropdown" id="salesDrop1"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">営業日1</label>
+            <input type="date" class="form-input" id="inSalesDate1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">営業担当2</label>
+            <div class="suggest-wrap">
+              <input type="text" class="form-input suggest-input" id="inSales2"
+                placeholder="担当者名または「不明」"
+                autocomplete="off"
+                oninput="onSalesInput(this.value,'salesDrop2')"
+                onkeydown="onSuggestKey(event,'salesDrop2')"
+                onfocus="onSalesInput(this.value,'salesDrop2')"
+                onblur="setTimeout(()=>closeDrop('salesDrop2'),200)">
+              <div class="suggest-dropdown" id="salesDrop2"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">営業日2</label>
+            <input type="date" class="form-input" id="inSalesDate2">
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">備考・メモ</label>
@@ -701,7 +757,7 @@
     <div class="table-scroll"><table>
       <thead><tr>
         <th>依頼日</th><th>紹介元事業所</th><th>担当者</th><th>種別</th><th>拠点</th>
-        <th>患者名</th><th>ステータス</th><th>不成立理由</th><th>備考</th><th>操作</th>
+        <th>患者名</th><th>主治医</th><th>ステータス</th><th>不成立理由</th><th>営業担当</th><th>備考</th><th>操作</th>
       </tr></thead>
       <tbody id="listTableBody"></tbody>
     </table></div>
@@ -905,14 +961,44 @@
       <div class="modal-info" id="modalInfo"></div>
 
       <div class="modal-section">基本情報を修正</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
         <div class="form-group">
           <label class="form-label">患者名</label>
           <input type="text" class="form-input" id="modalPatient" placeholder="患者名（漢字・ひらがな）">
         </div>
         <div class="form-group">
+          <label class="form-label">主治医</label>
+          <input type="text" class="form-input" id="modalDoctor" placeholder="担当医師名">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="form-group">
           <label class="form-label">担当者名</label>
           <input type="text" class="form-input" id="modalPerson" placeholder="担当者名">
+        </div>
+        <div class="form-group"></div>
+      </div>
+      <div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:8px;">📣 関連営業担当</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+          <div class="form-group">
+            <label class="form-label">営業担当1</label>
+            <input type="text" class="form-input" id="modalSales1" placeholder="担当者名または「不明」">
+          </div>
+          <div class="form-group">
+            <label class="form-label">営業日1</label>
+            <input type="date" class="form-input" id="modalSalesDate1">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="form-group">
+            <label class="form-label">営業担当2</label>
+            <input type="text" class="form-input" id="modalSales2" placeholder="担当者名または「不明」">
+          </div>
+          <div class="form-group">
+            <label class="form-label">営業日2</label>
+            <input type="date" class="form-input" id="modalSalesDate2">
+          </div>
         </div>
       </div>
 
@@ -965,10 +1051,20 @@ const COLUMNS = [
   {col:'D',name:'種別',         ex:'ケアマネ事業所'},
   {col:'E',name:'拠点',         ex:'芝浦拠点'},
   {col:'F',name:'患者名',       ex:'田中 様'},
-  {col:'G',name:'ステータス',   ex:'調整中 / 成立 / 不成立'},
-  {col:'H',name:'不成立理由',   ex:'入院継続'},
-  {col:'I',name:'備考',         ex:'退院調整・在宅希望強い'},
+  {col:'G',name:'主治医',       ex:'山田 医師'},
+  {col:'H',name:'ステータス',   ex:'調整中 / 成立 / 不成立'},
+  {col:'I',name:'不成立理由',   ex:'入院継続'},
+  {col:'J',name:'備考',         ex:'退院調整・在宅希望強い'},
+  {col:'K',name:'登録日時',     ex:'自動入力'},
+  {col:'L',name:'営業担当1',    ex:'山田 太郎'},
+  {col:'M',name:'営業日1',      ex:'2025-01-10'},
+  {col:'N',name:'営業担当2',    ex:'鈴木 花子'},
+  {col:'O',name:'営業日2',      ex:'2025-01-12'},
   {col:'J',name:'登録日時',     ex:'自動入力'},
+  {col:'K',name:'営業担当1',    ex:'山田 太郎'},
+  {col:'L',name:'営業日1',      ex:'2025-01-10'},
+  {col:'M',name:'営業担当2',    ex:'鈴木 花子'},
+  {col:'N',name:'営業日2',      ex:'2025-01-12'},
 ];
 
 const NG_REASONS = ['入院継続','他院決定','入所','転院','死亡','その他'];
@@ -1414,7 +1510,7 @@ function buildListTable(){
   });
   document.getElementById('listCount').textContent=`${data.length}件`;
   const tb=document.getElementById('listTableBody');
-  if(!data.length){ tb.innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">該当なし</div></div></td></tr>`; return; }
+  if(!data.length){ tb.innerHTML=`<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">該当なし</div></div></td></tr>`; return; }
   tb.innerHTML=data.map(d=>`
     <tr>
       <td>${d.date}</td>
@@ -1423,9 +1519,14 @@ function buildListTable(){
       <td><span class="type-badge ${typeClass(d.type)}">${d.type||'—'}</span></td>
       <td><span class="loc-badge ${locClass(d.location)}">${d.location||'—'}</span></td>
       <td style="font-size:12px;color:var(--ink-3);">${d.patient||'—'}</td>
+      <td style="font-size:12px;color:var(--ink-3);">${d.doctor||'—'}</td>
       <td>${statusBadge(d.status)}</td>
       <td style="font-size:12px;color:${d.status==='不成立'?'var(--red)':'var(--ink-3)'};">${d.reason||'—'}</td>
-      <td style="font-size:12px;color:var(--ink-3);max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${d.note||'—'}</td>
+      <td style="font-size:12px;color:var(--ink-3);">${
+        [d.sales1,d.salesDate1?`(${d.salesDate1})`:''].filter(Boolean).join(' ')
+        || (d.sales2 ? '' : '—')
+      }${d.sales2 ? '<br>' + [d.sales2,d.salesDate2?`(${d.salesDate2})`:''].filter(Boolean).join(' ') : ''}</td>
+      <td style="font-size:12px;color:var(--ink-3);max-width:120px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${d.note||'—'}</td>
       <td><button class="edit-btn" onclick="openModal(${allData.indexOf(d)})">更新</button></td>
     </tr>`).join('');
 }
@@ -1800,7 +1901,12 @@ function openModal(idx){
   document.getElementById('modalNote').value=d.note||'';
   document.getElementById('modalNoteOk').value=d.note||'';
   document.getElementById('modalPatient').value=d.patient||'';
+  document.getElementById('modalDoctor').value=d.doctor||'';
   document.getElementById('modalPerson').value=d.person||'';
+  document.getElementById('modalSales1').value=d.sales1||'';
+  document.getElementById('modalSalesDate1').value=d.salesDate1||'';
+  document.getElementById('modalSales2').value=d.sales2||'';
+  document.getElementById('modalSalesDate2').value=d.salesDate2||'';
   updateStatusOpts();
   buildReasonGrid();
   document.getElementById('editModal').classList.add('open');
@@ -1850,7 +1956,13 @@ function saveModal(){
   const newPatient = document.getElementById('modalPatient').value.trim();
   const newPerson  = document.getElementById('modalPerson').value.trim();
   if(newPatient) allData[editIdx].patient = newPatient;
+  const newDoctor = document.getElementById('modalDoctor').value.trim();
+  allData[editIdx].doctor = newDoctor;
   if(newPerson)  allData[editIdx].person  = newPerson;
+  allData[editIdx].sales1 = document.getElementById('modalSales1').value.trim();
+  allData[editIdx].salesDate1 = document.getElementById('modalSalesDate1').value;
+  allData[editIdx].sales2 = document.getElementById('modalSales2').value.trim();
+  allData[editIdx].salesDate2 = document.getElementById('modalSalesDate2').value;
 
   if(gasUrl) pushUpdateToGAS(allData[editIdx]);
 
@@ -1903,15 +2015,20 @@ function pushUpdateToGAS(row){
 function submitReferral(){
   const row={
     id:`local-${Date.now()}`,
-    date:    document.getElementById('inDate').value,
-    org:     document.getElementById('inOrg').value.trim(),
-    person:  document.getElementById('inPerson').value.trim(),
-    type:    document.getElementById('inType').value,
-    location:document.getElementById('inLocation').value,
-    patient: document.getElementById('inPatient').value.trim(),
-    status:  document.getElementById('inStatus').value,
-    reason:  document.getElementById('inStatus').value==='不成立'?document.getElementById('inReason').value:'',
-    note:    document.getElementById('inNote').value.trim(),
+    date:      document.getElementById('inDate').value,
+    org:       document.getElementById('inOrg').value.trim(),
+    person:    document.getElementById('inPerson').value.trim(),
+    type:      document.getElementById('inType').value,
+    location:  document.getElementById('inLocation').value,
+    patient:   document.getElementById('inPatient').value.trim(),
+    doctor:    document.getElementById('inDoctor').value.trim(),
+    status:    document.getElementById('inStatus').value,
+    reason:    document.getElementById('inStatus').value==='不成立'?document.getElementById('inReason').value:'',
+    note:      document.getElementById('inNote').value.trim(),
+    sales1:     document.getElementById('inSales1').value.trim(),
+    salesDate1: document.getElementById('inSalesDate1').value,
+    sales2:     document.getElementById('inSales2').value.trim(),
+    salesDate2: document.getElementById('inSalesDate2').value,
   };
   if(!row.date||!row.org||!row.type||!row.location){
     showToast('必須項目（依頼日・事業所名・種別・拠点）を入力してください','error'); return;
@@ -1941,8 +2058,9 @@ function updateRecentInputList(row){
 }
 
 function clearForm(){
-  ['inOrg','inPerson','inPatient','inNote'].forEach(id=>document.getElementById(id).value='');
-  closeDrop('orgDrop'); closeDrop('personDrop');
+  ['inOrg','inPerson','inPatient','inDoctor','inNote','inSales1','inSales2'].forEach(id=>document.getElementById(id).value='');
+  ['inSalesDate1','inSalesDate2'].forEach(id=>document.getElementById(id).value='');
+  closeDrop('orgDrop'); closeDrop('personDrop'); closeDrop('doctorDrop'); closeDrop('salesDrop1'); closeDrop('salesDrop2');
   document.getElementById('inType').value='';
   document.getElementById('inLocation').value='';
   document.getElementById('inStatus').value='調整中';
@@ -1979,9 +2097,14 @@ function fetchFromGAS(){
         type:   r['種別']||'',
         location: r['拠点']||'',
         patient:  r['患者名']||'',
+        doctor:   r['主治医']||'',
         status:   r['ステータス']||'調整中',
         reason:   r['不成立理由']||'',
         note:     r['備考']||'',
+        sales1:     r['営業担当1']||'',
+        salesDate1: r['営業日1']||'',
+        sales2:     r['営業担当2']||'',
+        salesDate2: r['営業日2']||'',
       })).sort((a,b)=>b.date.localeCompare(a.date));
       document.getElementById('demoBanner').style.display='none';
       document.getElementById('headerStatus').innerHTML='<span class="status-dot connected"></span>スプレッドシート接続中';
@@ -2151,6 +2274,75 @@ function selectPerson(val){
   closeDrop('personDrop');
 }
 
+// 営業担当サジェスト（過去の営業担当名から候補を出す）
+function getSalesMembers(){
+  const all = new Set(['不明']);
+  allData.forEach(d=>{
+    if(d.sales1 && d.sales1 !== '不明') all.add(d.sales1);
+    if(d.sales2 && d.sales2 !== '不明') all.add(d.sales2);
+  });
+  return [...all];
+}
+
+function onSalesInput(q, dropId){
+  const drop = document.getElementById(dropId);
+  if(!drop) return;
+  const members = getSalesMembers();
+  const filtered = q
+    ? members.filter(m => m.toLowerCase().includes(q.toLowerCase()))
+    : members;
+
+  if(!filtered.length && !q){ drop.classList.remove('open'); return; }
+
+  const inputId = dropId === 'salesDrop1' ? 'inSales1' : 'inSales2';
+  let html = '';
+  filtered.slice(0,10).forEach(m => {
+    html += `<div class="suggest-item" onmousedown="selectSales('${m.replace(/'/g,"\'")}','${inputId}','${dropId}')">
+      <div class="suggest-item-main">${highlight(m, q)}</div>
+    </div>`;
+  });
+  if(q && !filtered.includes(q)){
+    html += `<div class="suggest-new" onmousedown="selectSales('${q.replace(/'/g,"\'")}','${inputId}','${dropId}')">
+      ＋「${q}」を新規追加</div>`;
+  }
+  drop.innerHTML = html;
+  drop.classList.add('open');
+}
+
+function getDoctors(){
+  return [...new Set(allData.map(d=>d.doctor).filter(Boolean))];
+}
+
+function onDoctorInput(q){
+  const drop = document.getElementById('doctorDrop');
+  const doctors = getDoctors();
+  const filtered = q
+    ? doctors.filter(d => d.toLowerCase().includes(q.toLowerCase()))
+    : doctors;
+  if(!filtered.length && !q){ drop.classList.remove('open'); return; }
+  let html = '';
+  filtered.slice(0,10).forEach(d => {
+    html += `<div class="suggest-item" onmousedown="selectDoctor('${d.replace(/'/g,"\'")}')">
+      <div class="suggest-item-main">${highlight(d, q)}</div>
+    </div>`;
+  });
+  if(q && !filtered.includes(q)){
+    html += `<div class="suggest-new" onmousedown="selectDoctor('${q.replace(/'/g,"\'")}')">＋「${q}」を新規追加</div>`;
+  }
+  drop.innerHTML = html;
+  drop.classList.add('open');
+}
+
+function selectDoctor(val){
+  document.getElementById('inDoctor').value = val;
+  closeDrop('doctorDrop');
+}
+
+function selectSales(val, inputId, dropId){
+  document.getElementById(inputId).value = val;
+  closeDrop(dropId);
+}
+
 function closeDrop(id){
   const el = document.getElementById(id);
   if(el) el.classList.remove('open');
@@ -2243,8 +2435,9 @@ function addRowObj(row) {
   const uniqueId = new Date().toISOString() + '-' + Math.random().toString(36).slice(2,8);
   sh.appendRow([
     row.date, row.org, row.person, row.type, row.location,
-    row.patient, row.status || '調整中', row.reason || '', row.note || '',
-    uniqueId
+    row.patient, row.doctor || '', row.status || '調整中', row.reason || '', row.note || '',
+    uniqueId,
+    row.sales1 || '', row.salesDate1 || '', row.sales2 || '', row.salesDate2 || ''
   ]);
   return { success: true, id: uniqueId };
 }
@@ -2255,11 +2448,16 @@ function updateRowObj(row) {
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][9]) === String(row.id)) {
-      if (row.patient) sh.getRange(i + 1, 6).setValue(row.patient); // F: 患者名
-      if (row.person)  sh.getRange(i + 1, 3).setValue(row.person);  // C: 担当者名
-      sh.getRange(i + 1, 7).setValue(row.status);   // G: ステータス
-      sh.getRange(i + 1, 8).setValue(row.reason);   // H: 不成立理由
-      sh.getRange(i + 1, 9).setValue(row.note);     // I: 備考
+      if (row.patient) sh.getRange(i + 1, 6).setValue(row.patient);   // F: 患者名
+      if (row.person)  sh.getRange(i + 1, 3).setValue(row.person);    // C: 担当者名
+      sh.getRange(i + 1, 7).setValue(row.status);                     // G: ステータス
+      sh.getRange(i + 1, 8).setValue(row.reason);                     // H: 不成立理由
+      sh.getRange(i + 1, 9).setValue(row.note);                       // I: 備考
+      sh.getRange(i + 1, 7).setValue(row.doctor || '');               // G: 主治医
+      sh.getRange(i + 1, 11).setValue(row.sales1 || '');              // K: 営業担当1
+      sh.getRange(i + 1, 12).setValue(row.salesDate1 || '');          // L: 営業日1
+      sh.getRange(i + 1, 13).setValue(row.sales2 || '');              // M: 営業担当2
+      sh.getRange(i + 1, 14).setValue(row.salesDate2 || '');          // N: 営業日2
       return { success: true };
     }
   }
