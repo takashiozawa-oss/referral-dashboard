@@ -401,6 +401,7 @@
   <button class="tab-btn" onclick="switchTab('list')">📋 依頼一覧・更新</button>
   <button class="tab-btn" onclick="switchTab('ranking')">🏆 紹介元ランキング</button>
   <button class="tab-btn" onclick="switchTab('compare')">🔀 比較分析</button>
+  <button class="tab-btn" onclick="switchTab('people')">👥 担当者分析</button>
   <button class="tab-btn" onclick="switchTab('settings')">⚙️ 設定</button>
 </div>
 
@@ -901,6 +902,143 @@
   </div>
 </div>
 
+<!-- ======== PEOPLE ======== -->
+<div class="tab-panel" id="tab-people">
+  <div class="filter-bar">
+    <span class="filter-label">期間</span>
+    <div class="ym-select"><select id="peopleYear1"></select>年<select id="peopleMonth1">
+      <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+      <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+      <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+      <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+    </select>月</div>
+    <span style="color:var(--ink-3)">〜</span>
+    <div class="ym-select"><select id="peopleYear2"></select>年<select id="peopleMonth2">
+      <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+      <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+      <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+      <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+    </select>月</div>
+    <div class="filter-sep"></div>
+    <span class="filter-label">拠点</span>
+    <select id="peopleLocation">
+      <option value="all">全拠点</option>
+      <option>芝浦拠点</option>
+      <option>城東拠点</option>
+    </select>
+    <button class="btn btn-primary" onclick="buildPeopleTab()">更新</button>
+  </div>
+
+  <!-- 切り替えトグル -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;">
+    <button class="btn" id="toggleSales" onclick="setPeopleMode('sales')"
+      style="background:var(--accent);color:#fff;">📣 営業担当別</button>
+    <button class="btn btn-secondary" id="toggleDoctor" onclick="setPeopleMode('doctor')">🩺 主治医別</button>
+  </div>
+
+  <!-- 営業担当パネル -->
+  <div id="salesPanel">
+    <!-- KPI -->
+    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+      <div class="kpi-card">
+        <div class="kpi-label">営業担当者数</div>
+        <div class="kpi-value" id="salesKpiMembers">—<span class="kpi-unit">名</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">営業関与件数</div>
+        <div class="kpi-value" id="salesKpiTotal">—<span class="kpi-unit">件</span></div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:4px;">担当1・2合算</div>
+      </div>
+      <div class="kpi-card highlight">
+        <div class="kpi-label">「不明」を除く関与率</div>
+        <div class="kpi-value" id="salesKpiRate">—<span class="kpi-unit">%</span></div>
+      </div>
+    </div>
+
+    <!-- 棒グラフ -->
+    <div class="chart-grid" style="margin-bottom:20px;">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">営業担当別 関与件数</div><div class="chart-sub">担当1・2合算</div></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartSalesBar"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">営業担当別 月別推移</div><div class="chart-sub">上位5名</div></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartSalesTrend"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 詳細テーブル -->
+    <div class="table-wrap">
+      <div class="table-header"><div class="table-title">営業担当別 詳細</div></div>
+      <div class="table-scroll">
+        <table style="min-width:600px;width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th>順位</th><th>営業担当</th>
+            <th class="num">関与件数</th><th class="num">成立</th><th class="num">調整中</th><th class="num">不成立</th>
+            <th>主な紹介元</th><th>最終関与日</th>
+          </tr></thead>
+          <tbody id="salesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主治医パネル -->
+  <div id="doctorPanel" style="display:none;">
+    <!-- KPI -->
+    <div class="kpi-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+      <div class="kpi-card">
+        <div class="kpi-label">主治医数</div>
+        <div class="kpi-value" id="docKpiMembers">—<span class="kpi-unit">名</span></div>
+      </div>
+      <div class="kpi-card highlight">
+        <div class="kpi-label">最多担当医師</div>
+        <div class="kpi-value" style="font-size:18px;" id="docKpiTop">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">主治医記録あり</div>
+        <div class="kpi-value" id="docKpiRate">—<span class="kpi-unit">%</span></div>
+      </div>
+    </div>
+
+    <!-- グラフ -->
+    <div class="chart-grid" style="margin-bottom:20px;">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">主治医別 担当患者数</div><div class="chart-sub">成立件数ベース</div></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartDoctorBar"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">主治医別 月別推移</div><div class="chart-sub">上位5名</div></div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartDoctorTrend"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 詳細テーブル -->
+    <div class="table-wrap">
+      <div class="table-header"><div class="table-title">主治医別 詳細</div></div>
+      <div class="table-scroll">
+        <table style="min-width:600px;width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th>順位</th><th>主治医</th>
+            <th class="num">担当患者数</th><th class="num">成立</th><th class="num">調整中</th>
+            <th>主な拠点</th><th>最終担当日</th>
+          </tr></thead>
+          <tbody id="doctorTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- ======== SETTINGS ======== -->
 <div class="tab-panel" id="tab-settings">
   <div class="setup-card" style="background:linear-gradient(135deg,#1a2e1a,#1e3d2d);margin-bottom:16px;">
@@ -1227,7 +1365,8 @@ function initYearSelects(){
   const minY = years.length ? Math.min(...years) : thisYear - 2;
   const maxY = thisYear + 1;
   const yearIds = ['filterYear1','filterYear2','listYear1','listYear2',
-                   'rankYear1','rankYear2','cmpAYear1','cmpAYear2','cmpBYear1','cmpBYear2'];
+                   'rankYear1','rankYear2','cmpAYear1','cmpAYear2','cmpBYear1','cmpBYear2',
+                   'peopleYear1','peopleYear2'];
   yearIds.forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
@@ -1265,6 +1404,8 @@ function initYearSelects(){
   setYMIfEmpty('cmpAYear2','cmpAMonth2', thisYear - 1, 12);
   setYMIfEmpty('cmpBYear1','cmpBMonth1', thisYear, 1);
   setYMIfEmpty('cmpBYear2','cmpBMonth2', thisYear, thisMonthNum);
+  setYMIfEmpty('peopleYear1','peopleMonth1', thisYear, 1);
+  setYMIfEmpty('peopleYear2','peopleMonth2', thisYear, thisMonthNum);
 }
 
 window.addEventListener('DOMContentLoaded',()=>{
@@ -1532,6 +1673,238 @@ function buildListTable(){
 }
 
 
+
+// ============================================================
+//  PEOPLE TAB
+// ============================================================
+let _peopleMode = 'sales';
+
+function setPeopleMode(mode){
+  _peopleMode = mode;
+  document.getElementById('salesPanel').style.display  = mode==='sales'  ? '' : 'none';
+  document.getElementById('doctorPanel').style.display = mode==='doctor' ? '' : 'none';
+  document.getElementById('toggleSales').style.cssText  = mode==='sales'
+    ? 'background:var(--accent);color:#fff;' : '';
+  document.getElementById('toggleDoctor').style.cssText = mode==='doctor'
+    ? 'background:var(--accent);color:#fff;' : '';
+  if(mode==='sales')  buildSalesPanel();
+  if(mode==='doctor') buildDoctorPanel();
+}
+
+function buildPeopleTab(){
+  // 年セレクター初期化
+  const yearIds=['peopleYear1','peopleYear2'];
+  yearIds.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el && !el.options.length){
+      const now=new Date(); const thisYear=now.getFullYear();
+      const years=[...new Set(allData.map(d=>d.date.slice(0,4)))].map(Number).sort();
+      const minY=years.length?Math.min(...years):thisYear-2;
+      for(let y=minY;y<=thisYear+1;y++){
+        const o=document.createElement('option');
+        o.value=y;o.textContent=y;el.appendChild(o);
+      }
+      el.value=thisYear;
+    }
+  });
+  const now=new Date();
+  const m=document.getElementById('peopleMonth1');
+  if(m&&m.value==='01'&&now.getMonth()>0){
+    // デフォルト設定済みの場合はスキップ
+  }
+  if(_peopleMode==='sales') buildSalesPanel();
+  else buildDoctorPanel();
+}
+
+function getPeopleFiltered(){
+  const from=getYM('peopleYear1','peopleMonth1');
+  const to  =getYM('peopleYear2','peopleMonth2');
+  const loc =document.getElementById('peopleLocation')?.value||'all';
+  return allData.filter(d=>{
+    const ym=d.date.slice(0,7);
+    if(from&&ym<from) return false;
+    if(to  &&ym>to)   return false;
+    if(loc!=='all'&&d.location!==loc) return false;
+    return true;
+  });
+}
+
+// ---- 営業担当パネル ----
+function buildSalesPanel(){
+  const data = getPeopleFiltered();
+  const months = getMonthRange(getYM('peopleYear1','peopleMonth1'), getYM('peopleYear2','peopleMonth2'));
+
+  // 担当者別集計（担当1・2合算）
+  const map={};
+  data.forEach(d=>{
+    [d.sales1, d.sales2].filter(Boolean).forEach(s=>{
+      if(!map[s]) map[s]={name:s, count:0, ok:0, ng:0, pending:0, orgs:{}, lastDate:'', dates:[]};
+      map[s].count++;
+      if(d.status==='成立')   map[s].ok++;
+      if(d.status==='不成立') map[s].ng++;
+      if(d.status==='調整中') map[s].pending++;
+      if(d.org) map[s].orgs[d.org]=(map[s].orgs[d.org]||0)+1;
+      if(!map[s].lastDate||d.date>map[s].lastDate) map[s].lastDate=d.date;
+      map[s].dates.push(d.date);
+    });
+  });
+
+  const rows=Object.values(map).sort((a,b)=>b.count-a.count);
+  const withoutUnknown=rows.filter(r=>r.name!=='不明');
+  const totalInvolved=data.filter(d=>d.sales1||d.sales2).length;
+
+  // KPI
+  document.getElementById('salesKpiMembers').innerHTML=`${withoutUnknown.length}<span class="kpi-unit">名</span>`;
+  document.getElementById('salesKpiTotal').innerHTML=`${rows.reduce((s,r)=>s+r.count,0)}<span class="kpi-unit">件</span>`;
+  const rate=data.length?Math.round(totalInvolved/data.length*100):0;
+  document.getElementById('salesKpiRate').innerHTML=`${rate}<span class="kpi-unit">%</span>`;
+
+  // 棒グラフ
+  dc('salesBar');
+  const PCOLS=['#3563e9','#1ab87a','#8b5cf6','#f59e0b','#ef4444','#06b6d4','#ec4899','#94a3b8'];
+  charts['salesBar']=new Chart(document.getElementById('chartSalesBar'),{
+    type:'bar',
+    data:{
+      labels:rows.map(r=>r.name),
+      datasets:[
+        {label:'成立',   data:rows.map(r=>r.ok),      backgroundColor:'#1ab87a', borderRadius:3},
+        {label:'調整中', data:rows.map(r=>r.pending),  backgroundColor:'#f59e0b', borderRadius:3},
+        {label:'不成立', data:rows.map(r=>r.ng),       backgroundColor:'#ef4444', borderRadius:3},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}}},
+      scales:{x:{stacked:true,grid:{color:'#e4e6ef'},ticks:{font:{size:11}}},
+              y:{stacked:true,grid:{display:false},ticks:{font:{size:11}}}}
+    }
+  });
+
+  // トレンドグラフ（上位5名）
+  dc('salesTrend');
+  const top5=withoutUnknown.slice(0,5);
+  charts['salesTrend']=new Chart(document.getElementById('chartSalesTrend'),{
+    type:'line',
+    data:{
+      labels:months.map(m=>m.slice(5)+'月'),
+      datasets:top5.map((r,i)=>({
+        label:r.name,
+        data:months.map(m=>data.filter(d=>
+          d.date.slice(0,7)===m&&(d.sales1===r.name||d.sales2===r.name)
+        ).length),
+        borderColor:PCOLS[i], backgroundColor:PCOLS[i]+'22',
+        tension:.3, pointRadius:3, fill:false,
+      }))
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}}},
+      scales:{x:{grid:{display:false},ticks:{font:{size:11}}},
+              y:{grid:{color:'#e4e6ef'},ticks:{font:{size:11},stepSize:1}}}
+    }
+  });
+
+  // テーブル
+  const tb=document.getElementById('salesTableBody');
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">データなし</div></div></td></tr>'; return; }
+  tb.innerHTML=rows.map((r,i)=>{
+    const topOrg=Object.entries(r.orgs).sort((a,b)=>b[1]-a[1])[0];
+    const bc=i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    return `<tr>
+      <td><span class="rank-badge ${bc}">${i+1}</span></td>
+      <td><strong>${r.name}</strong></td>
+      <td class="num">${r.count}</td>
+      <td class="num" style="color:var(--green)">${r.ok}</td>
+      <td class="num" style="color:var(--amber)">${r.pending}</td>
+      <td class="num" style="color:var(--red)">${r.ng}</td>
+      <td style="font-size:12px;color:var(--ink-3);">${topOrg?topOrg[0]+'('+topOrg[1]+'件)':'—'}</td>
+      <td style="font-size:12px;color:var(--ink-3);">${r.lastDate||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ---- 主治医パネル ----
+function buildDoctorPanel(){
+  const data = getPeopleFiltered();
+  const months = getMonthRange(getYM('peopleYear1','peopleMonth1'), getYM('peopleYear2','peopleMonth2'));
+
+  const map={};
+  data.filter(d=>d.doctor).forEach(d=>{
+    if(!map[d.doctor]) map[d.doctor]={name:d.doctor, count:0, ok:0, pending:0, locs:{}, lastDate:'', dates:[]};
+    map[d.doctor].count++;
+    if(d.status==='成立')   map[d.doctor].ok++;
+    if(d.status==='調整中') map[d.doctor].pending++;
+    if(d.location) map[d.doctor].locs[d.location]=(map[d.doctor].locs[d.location]||0)+1;
+    if(!map[d.doctor].lastDate||d.date>map[d.doctor].lastDate) map[d.doctor].lastDate=d.date;
+    map[d.doctor].dates.push(d.date);
+  });
+
+  const rows=Object.values(map).sort((a,b)=>b.count-a.count);
+  const withDoctor=data.filter(d=>d.doctor).length;
+  const rate=data.length?Math.round(withDoctor/data.length*100):0;
+
+  // KPI
+  document.getElementById('docKpiMembers').innerHTML=`${rows.length}<span class="kpi-unit">名</span>`;
+  document.getElementById('docKpiTop').innerHTML=rows.length?rows[0].name:'—';
+  document.getElementById('docKpiRate').innerHTML=`${rate}<span class="kpi-unit">%</span>`;
+
+  const PCOLS=['#3563e9','#1ab87a','#8b5cf6','#f59e0b','#ef4444','#06b6d4'];
+
+  // 棒グラフ
+  dc('doctorBar');
+  charts['doctorBar']=new Chart(document.getElementById('chartDoctorBar'),{
+    type:'bar',
+    data:{
+      labels:rows.map(r=>r.name),
+      datasets:[
+        {label:'成立',   data:rows.map(r=>r.ok),             backgroundColor:'#1ab87a', borderRadius:3},
+        {label:'調整中', data:rows.map(r=>r.pending),         backgroundColor:'#f59e0b', borderRadius:3},
+        {label:'その他', data:rows.map(r=>r.count-r.ok-r.pending), backgroundColor:'#e4e6ef', borderRadius:3},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}}},
+      scales:{x:{stacked:true,grid:{color:'#e4e6ef'},ticks:{font:{size:11}}},
+              y:{stacked:true,grid:{display:false},ticks:{font:{size:11}}}}
+    }
+  });
+
+  // トレンドグラフ（上位5名）
+  dc('doctorTrend');
+  const top5=rows.slice(0,5);
+  charts['doctorTrend']=new Chart(document.getElementById('chartDoctorTrend'),{
+    type:'line',
+    data:{
+      labels:months.map(m=>m.slice(5)+'月'),
+      datasets:top5.map((r,i)=>({
+        label:r.name,
+        data:months.map(m=>data.filter(d=>d.date.slice(0,7)===m&&d.doctor===r.name).length),
+        borderColor:PCOLS[i], backgroundColor:PCOLS[i]+'22',
+        tension:.3, pointRadius:3, fill:false,
+      }))
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}}},
+      scales:{x:{grid:{display:false},ticks:{font:{size:11}}},
+              y:{grid:{color:'#e4e6ef'},ticks:{font:{size:11},stepSize:1}}}
+    }
+  });
+
+  // テーブル
+  const tb=document.getElementById('doctorTableBody');
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🩺</div><div class="empty-title">主治医データなし</div><div class="empty-desc">依頼登録時に主治医を入力してください</div></div></td></tr>'; return; }
+  tb.innerHTML=rows.map((r,i)=>{
+    const topLoc=Object.entries(r.locs).sort((a,b)=>b[1]-a[1])[0];
+    const bc=i===0?'gold':i===1?'silver':i===2?'bronze':'';
+    return `<tr>
+      <td><span class="rank-badge ${bc}">${i+1}</span></td>
+      <td><strong>${r.name}</strong></td>
+      <td class="num">${r.count}</td>
+      <td class="num" style="color:var(--green)">${r.ok}</td>
+      <td class="num" style="color:var(--amber)">${r.pending}</td>
+      <td style="font-size:12px;color:var(--ink-3);">${topLoc?`<span class="loc-badge ${locClass(topLoc[0])}">${topLoc[0]}</span>`:'—'}</td>
+      <td style="font-size:12px;color:var(--ink-3);">${r.lastDate||'—'}</td>
+    </tr>`;
+  }).join('');
+}
 // ============================================================
 //  COMPARE
 // ============================================================
@@ -2148,13 +2521,14 @@ function saveGasUrl(){
 //  UTILITIES
 // ============================================================
 function switchTab(id){
-  const ids=['dashboard','input','list','ranking','compare','settings'];
+  const ids=['dashboard','input','list','ranking','compare','people','settings'];
   document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',ids[i]===id));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.getElementById(`tab-${id}`).classList.add('active');
   if(id==='ranking') buildRankingTable();
   if(id==='list')    buildListTable();
   if(id==='compare')  initCompareDefaults();
+  if(id==='people')   buildPeopleTab();
   if(id==='settings'){ const c=localStorage.getItem('googleClientId'); if(c){ const el=document.getElementById('googleClientIdInput'); if(el) el.value=c; } }
 }
 
