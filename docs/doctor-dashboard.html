@@ -756,9 +756,15 @@ function migrateState(){
     }
   });
   // 既存医師にhistoryがなければ現行設定から補完
+  // historyのエントリにslotsがなければルートレベルのslotsを補完
   state.doctors.forEach(d=>{
     if(!d.history || d.history.length===0){
       d.history = [{ from:'2020-W01', schedule:d.schedule, slots:d.slots }];
+    } else {
+      // 既存エントリのslotsが未設定でルートにslotsがあれば補完
+      d.history.forEach(h=>{
+        if((h.slots == null) && d.slots != null) h.slots = d.slots;
+      });
     }
   });
   state.doctors.forEach(d=>{
@@ -830,10 +836,16 @@ function docConfigAt(doc, weekKey){
   const valid = doc.history
     .filter(h => wkLte(h.from, weekKey))
     .sort((a,b) => a.from < b.from ? 1 : -1);
-  if(valid.length > 0) return { schedule: valid[0].schedule, slots: valid[0].slots };
+  if(valid.length > 0){
+    const h = valid[0];
+    // historyエントリのslotsが未設定の場合、ルートレベルのslotsをフォールバックとして使用
+    const slots = (h.slots != null) ? h.slots : doc.slots;
+    return { schedule: h.schedule, slots };
+  }
   // 全エントリより前の週 → 一番古い設定を使用
   const oldest = doc.history.slice().sort((a,b)=>a.from<b.from?-1:1)[0];
-  return { schedule: oldest.schedule, slots: oldest.slots };
+  const slots = (oldest.slots != null) ? oldest.slots : doc.slots;
+  return { schedule: oldest.schedule, slots };
 }
 
 /* 医師オブジェクトに週時点の設定を合成して返す（計算用の一時オブジェクト） */
@@ -1623,18 +1635,16 @@ function saveDoc(){
   if(editingDocId){
     const d = state.doctors.find(x=>x.id===editingDocId);
     d.name = name;
-    // 履歴を更新
     if(!d.history) d.history = [];
+    const entry = { from:applyFrom, schedule, slots:slotsObj };
     // 同じfromが既にあれば上書き、なければ追加
     const existing = d.history.findIndex(h=>h.from===applyFrom);
-    const entry = { from:applyFrom, schedule, slots:slotsObj };
     if(existing>=0) d.history[existing] = entry;
     else d.history.push(entry);
-    // 今週以降の最新設定をd.schedule/d.slotsにも反映（現行設定として保持）
-    const latestFrom = d.history
-      .filter(h=>h.from<=curWk).sort((a,b)=>a.from<b.from?1:-1)[0]
-      || d.history.sort((a,b)=>a.from<b.from?-1:1)[0];
-    if(latestFrom){ d.schedule=latestFrom.schedule; d.slots=latestFrom.slots; }
+    // ルートレベルのschedule/slotsも最新状態に同期
+    // （docConfigAtのフォールバックとして使われるため常に最新を保持）
+    d.schedule = schedule;
+    d.slots = slotsObj;
   } else {
     // 新規追加: historyに今週エントリを作成
     state.doctors.push({
