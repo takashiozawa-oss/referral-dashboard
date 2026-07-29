@@ -1163,7 +1163,8 @@ function renderSiteSummary(wk){
           const v = day[se.key]; if(!v) return;
           sitesOfSession(v).forEach(sid=>{
             if(sid===site.id){
-              dayCap[i] += isAltWeek(v) ? capPerSess * 0.5 : capPerSess * WEEKS_PER_MONTH;
+              // 隔週は月1回ぶん(×1)、毎週は月2回ぶん(×WEEKS_PER_MONTH)
+              dayCap[i] += isAltWeek(v) ? capPerSess : capPerSess * WEEKS_PER_MONTH;
             }
           });
         });
