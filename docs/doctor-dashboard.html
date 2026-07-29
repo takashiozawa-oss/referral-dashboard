@@ -1157,17 +1157,23 @@ function renderSiteSummary(wk){
       dw.schedule.forEach((day,i)=>{
         const raw = dowCapRaw(dw, i);
         if(raw === 0) return;
-        const nSess = SESSIONS.filter(se=>day[se.key]).length;
-        const capPerSess = nSess > 0 ? raw / nSess : 0;
-        SESSIONS.forEach(se=>{
-          const v = day[se.key]; if(!v) return;
-          sitesOfSession(v).forEach(sid=>{
-            if(sid===site.id){
-              // 隔週は月1回ぶん(×1)、毎週は月2回ぶん(×WEEKS_PER_MONTH)
-              dayCap[i] += isAltWeek(v) ? capPerSess : capPerSess * WEEKS_PER_MONTH;
-            }
-          });
+        const activeSessions = SESSIONS.filter(se=>day[se.key]);
+        if(activeSessions.length === 0) return;
+        const slotPerSession = raw / activeSessions.length;
+        // 曜日単位でsiteRaw/siteAltに集約（docCapacityBySiteと同じ設計）
+        const siteRaw = {}, siteAlt = {};
+        activeSessions.forEach(se=>{
+          const v = day[se.key];
+          if(isAltWeek(v)){
+            siteAlt[v.odd]  = (siteAlt[v.odd]||0)  + slotPerSession;
+            siteAlt[v.even] = (siteAlt[v.even]||0) + slotPerSession;
+          } else {
+            const sid = typeof v==='string' ? v : (v.odd||v.even);
+            siteRaw[sid] = (siteRaw[sid]||0) + slotPerSession;
+          }
         });
+        if(siteRaw[site.id]) dayCap[i] += siteRaw[site.id] * WEEKS_PER_MONTH;
+        if(siteAlt[site.id]) dayCap[i] += siteAlt[site.id]; // 隔週は月1回ぶん
       });
       const ld = convertedLoad(recordForDoc(wk,d.id), docAt(d,wk), currentMonday);
       // byDowSite: 'dow_siteId'
