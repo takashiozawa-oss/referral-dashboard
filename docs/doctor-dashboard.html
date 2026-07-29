@@ -890,22 +890,27 @@ function docCapacityBySite(doc){
   doc.schedule.forEach((day,i)=>{
     const raw = dowCapRaw(doc, i);
     if(raw === 0) return;
-    // その曜日に関わる拠点を特定して按分
-    const sites = [];
-    SESSIONS.forEach(se=>{ sitesOfSession(day[se.key]).forEach(s=>sites.push({s,alt:isAltWeek(day[se.key])})); });
-    if(sites.length === 0) return;
-    // 枠をコマ比率で按分
-    const slotPerSession = raw / SESSIONS.filter(se=>day[se.key]).length;
-    SESSIONS.forEach(se=>{
-      const v = day[se.key]; if(!v) return;
+    // その日の拠点ごとに「その拠点でこの曜日に使える枠」を集計
+    // 隔週の場合は odd/even 拠点それぞれに raw*WEEKS_PER_MONTH 枠
+    // （月2回のうち1回がその拠点、但し1回あたりrawを全部使うので total=raw*WEEKS_PER_MONTH）
+    const siteRaw = {};    // 毎週拠点 -> 1日あたり枠
+    const siteAlt = {};    // 隔週拠点 -> 1日あたり枠（月1回ぶん）
+    const activeSessions = SESSIONS.filter(se=>day[se.key]);
+    if(activeSessions.length === 0) return;
+    const slotPerSession = raw / activeSessions.length;
+    activeSessions.forEach(se=>{
+      const v = day[se.key];
       if(isAltWeek(v)){
-        m[v.odd]  = (m[v.odd]||0)  + slotPerSession * 0.5 * WEEKS_PER_MONTH / WEEKS_PER_MONTH;
-        m[v.even] = (m[v.even]||0) + slotPerSession * 0.5 * WEEKS_PER_MONTH / WEEKS_PER_MONTH;
+        siteAlt[v.odd]  = (siteAlt[v.odd]||0)  + slotPerSession;
+        siteAlt[v.even] = (siteAlt[v.even]||0) + slotPerSession;
       } else {
         const sid = typeof v==='string' ? v : (v.odd||v.even);
-        m[sid] = (m[sid]||0) + slotPerSession * WEEKS_PER_MONTH;
+        siteRaw[sid] = (siteRaw[sid]||0) + slotPerSession;
       }
     });
+    // 毎週拠点は ×WEEKS_PER_MONTH、隔週拠点は ×1（月1回ぶん）
+    Object.entries(siteRaw).forEach(([sid,r])=>{ m[sid]=(m[sid]||0)+r*WEEKS_PER_MONTH; });
+    Object.entries(siteAlt).forEach(([sid,r])=>{ m[sid]=(m[sid]||0)+r; });
   });
   return m;
 }
