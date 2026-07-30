@@ -980,16 +980,52 @@ function convertedLoad(rec, doc, monday){
   const byDow  = [0,0,0,0,0]; // 曜日index -> 換算
   const byDowSite = {}; // 'i_siteId' -> 換算（曜日×拠点マトリクス用）
   if(doc){
-    const slotMap = {}; docSlots(doc, monday).forEach(s=>slotMap[s.key]=s);
+    const slots = docSlots(doc, monday);
+    const slotMap = {}; slots.forEach(s=>slotMap[s.key]=s);
+
+    // 旧キー→新キーのマッピングを構築
+    // 例: '3_day' が slotMap にないが '3_am_odd','3_am_even','3_pm_odd','3_pm_even' がある場合
+    // '3_am' がないが '3_am_odd','3_am_even' がある場合 なども同様
+    const fallbackMap = {}; // 旧キー -> [新スロット...]
+    Object.keys(rec).forEach(slotKey=>{
+      if(slotMap[slotKey]) return; // 一致するスロットがあれば不要
+      const m = slotKey.match(/^([0-4])_(day|am|pm)$/);
+      if(!m) return;
+      const dow = m[1], sess = m[2];
+      // この曜日・セッションに対応する新スロットを探す
+      const candidates = slots.filter(s=>{
+        if(String(s.dow) !== dow) return false;
+        if(sess === 'day') return true; // dayは全スロット対象
+        return s.sessions === sess || s.sessions === 'day';
+      });
+      if(candidates.length > 0) fallbackMap[slotKey] = candidates;
+    });
+
     Object.entries(rec).forEach(([slotKey, counts])=>{
-      const slot = slotMap[slotKey];
-      if(!slot) return;
       let s = 0; PT_TYPES.forEach(t=>{ s += (counts[t.key]||0)*t.coef; });
-      total += s;
-      bySite[slot.site] = (bySite[slot.site]||0) + s;
-      byDow[slot.dow] += s;
-      const dk = slot.dow+'_'+slot.site;
-      byDowSite[dk] = (byDowSite[dk]||0) + s;
+      if(s === 0) return;
+
+      const slot = slotMap[slotKey];
+      if(slot){
+        // 通常の照合
+        total += s;
+        bySite[slot.site] = (bySite[slot.site]||0) + s;
+        byDow[slot.dow] += s;
+        const dk = slot.dow+'_'+slot.site;
+        byDowSite[dk] = (byDowSite[dk]||0) + s;
+      } else if(fallbackMap[slotKey]){
+        // 旧キー→新スロットに均等分配
+        const targets = fallbackMap[slotKey];
+        const share = s / targets.length;
+        targets.forEach(ts=>{
+          total += share;
+          bySite[ts.site] = (bySite[ts.site]||0) + share;
+          byDow[ts.dow] += share;
+          const dk = ts.dow+'_'+ts.site;
+          byDowSite[dk] = (byDowSite[dk]||0) + share;
+        });
+      }
+      // どちらにも一致しない場合は無視（設定変更で消えたスロット）
     });
   } else {
     Object.entries(rec).forEach(([siteId, counts])=>{
