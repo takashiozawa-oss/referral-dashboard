@@ -2824,14 +2824,14 @@ function updateRowObj(row) {
     if (String(rows[i][9]) === String(row.id)) {
       if (row.patient) sh.getRange(i + 1, 6).setValue(row.patient);   // F: 患者名
       if (row.person)  sh.getRange(i + 1, 3).setValue(row.person);    // C: 担当者名
-      sh.getRange(i + 1, 7).setValue(row.status);                     // G: ステータス
-      sh.getRange(i + 1, 8).setValue(row.reason);                     // H: 不成立理由
-      sh.getRange(i + 1, 9).setValue(row.note);                       // I: 備考
-      sh.getRange(i + 1, 7).setValue(row.doctor || '');               // G: 主治医
-      sh.getRange(i + 1, 11).setValue(row.sales1 || '');              // K: 営業担当1
-      sh.getRange(i + 1, 12).setValue(row.salesDate1 || '');          // L: 営業日1
-      sh.getRange(i + 1, 13).setValue(row.sales2 || '');              // M: 営業担当2
-      sh.getRange(i + 1, 14).setValue(row.salesDate2 || '');          // N: 営業日2
+      sh.getRange(i + 1, 7).setValue(row.doctor  || '');              // G: 主治医
+      sh.getRange(i + 1, 8).setValue(row.status);                     // H: ステータス
+      sh.getRange(i + 1, 9).setValue(row.reason  || '');              // I: 不成立理由
+      sh.getRange(i + 1, 10).setValue(row.note   || '');              // J: 備考
+      sh.getRange(i + 1, 12).setValue(row.sales1 || '');              // L: 営業担当1
+      sh.getRange(i + 1, 13).setValue(row.salesDate1 || '');          // M: 営業日1
+      sh.getRange(i + 1, 14).setValue(row.sales2 || '');              // N: 営業担当2
+      sh.getRange(i + 1, 15).setValue(row.salesDate2 || '');          // O: 営業日2
       return { success: true };
     }
   }
