@@ -2821,7 +2821,7 @@ function updateRowObj(row) {
   const sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][9]) === String(row.id)) {
+    if (String(rows[i][10]) === String(row.id)) {  // K列（インデックス10）= 登録日時
       if (row.patient) sh.getRange(i + 1, 6).setValue(row.patient);   // F: 患者名
       if (row.person)  sh.getRange(i + 1, 3).setValue(row.person);    // C: 担当者名
       sh.getRange(i + 1, 7).setValue(row.doctor  || '');              // G: 主治医
