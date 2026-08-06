@@ -680,8 +680,16 @@ async function saveState() {
   setSaveDot('saving');
   state.lastSaved = new Date().toISOString();
   try {
-    await postToGAS({ action: 'save', accessKey: ACCESS_KEY, state });
+    const stateJson = encodeURIComponent(JSON.stringify(state));
+    const data = await fetchFromGAS({
+      action: 'save',
+      accessKey: ACCESS_KEY,
+      stateData: stateJson,
+    });
+    if(data.error) throw new Error(data.error);
     setSaveDot('saved');
+    const st = document.getElementById('saveText');
+    if(st) st.textContent = 'クラウドに保存済み';
   } catch(e){
     console.error('save failed', e);
     setSaveDot('error');
