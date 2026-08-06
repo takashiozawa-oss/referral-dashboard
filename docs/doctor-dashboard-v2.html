@@ -673,7 +673,7 @@ let editingDocId = null;
 let ptDocId = null;
 
 /* ---------- storage ---------- */
-const GAS_URL = 'https://script.google.com/a/macros/mikami-kai.com/s/AKfycbzgd2IZbbLd2q5H665utxqNHKQWmCOkteQBZdrgvEoDiFRQr1v9Tqid7YIytI2DhR2cXw/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzgd2IZbbLd2q5H665utxqNHKQWmCOkteQBZdrgvEoDiFRQr1v9Tqid7YIytI2DhR2cXw/exec';
 
 async function saveState() {
   setSaveDot('saving');
@@ -681,6 +681,7 @@ async function saveState() {
   try {
     const res = await fetch(GAS_URL, {
       method: 'POST',
+      redirect: 'follow',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'save', state }),
     });
