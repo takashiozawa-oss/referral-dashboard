@@ -728,21 +728,20 @@ function fetchFromGAS(params){
     const script = document.createElement('script');
     script.src = url;
     script.async = true;
-    script.crossOrigin = 'anonymous';
     let settled = false;
+    let timer;
     window[cbName] = (data)=>{
       if(settled) return; settled = true;
+      clearTimeout(timer);
       delete window[cbName];
       if(script.parentNode) script.parentNode.removeChild(script);
       if(data && data.error) reject(new Error(data.error));
       else resolve(data);
     };
-    // onerrorは無視（302リダイレクトで発火することがあるが、コールバックが来れば成功）
     script.onerror = ()=>{
-      // エラーログだけ出して、コールバックが来るまで待つ
-      console.warn('JSONP script onerror（302リダイレクトの可能性あり、待機継続）');
+      console.warn('JSONP onerror（リダイレクトの可能性あり、コールバック待機中）');
     };
-    const timer = setTimeout(()=>{
+    timer = setTimeout(()=>{
       if(!settled){
         settled = true;
         delete window[cbName];
@@ -750,7 +749,6 @@ function fetchFromGAS(params){
         reject(new Error('タイムアウト（15秒）'));
       }
     }, 15000);
-    window[cbName]._timer = timer;
     (document.head || document.documentElement).appendChild(script);
   });
 }
@@ -790,12 +788,14 @@ async function loadState() {
     if(data.visits)  state.visits  = data.visits;
   } catch(e){
     console.error('load failed', e);
+  } finally {
+    // 成功・失敗どちらでも必ず初期化とマイグレーション実行
+    if (!state.sites)   state.sites   = [];
+    if (!state.doctors) state.doctors = [];
+    if (!state.records) state.records = {};
+    if (!state.visits)  state.visits  = {};
+    migrateState();
   }
-  if (!state.sites)   state.sites   = [];
-  if (!state.doctors) state.doctors = [];
-  if (!state.records) state.records = {};
-  if (!state.visits)  state.visits  = {};
-  migrateState();
 }
 
 function migrateState(){
@@ -2042,6 +2042,9 @@ window.openDoc=openDoc; window.delDoc=delDoc; window.openPt=openPt; window.delSi
   if(saveDot) saveDot.classList.add('saving');
   await loadState();
   setSaveDot('saved');
+  // 表示を直接更新（setSaveDotが効かない場合の保険）
+  const st = document.getElementById('saveText');
+  if(st) st.textContent = 'クラウドに保存済み';
   render();
   updateSaveBar();
 })();
