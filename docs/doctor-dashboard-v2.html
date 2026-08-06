@@ -720,31 +720,38 @@ function postToGAS(payload){
   });
 }
 
-/* GASからのGET（JSONP方式・CORS回避） */
 function fetchFromGAS(params){
   return new Promise((resolve, reject)=>{
     const cbName = 'gasCb_' + Date.now();
-    const script = document.createElement('script');
     const query = new URLSearchParams({ ...params, callback: cbName }).toString();
-    script.src = GAS_URL + '?' + query;
+    const url = GAS_URL + '?' + query;
+    const script = document.createElement('script');
+    script.src = url;
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    let settled = false;
     window[cbName] = (data)=>{
+      if(settled) return; settled = true;
       delete window[cbName];
-      document.body.removeChild(script);
-      if(data.error) reject(new Error(data.error));
+      if(script.parentNode) script.parentNode.removeChild(script);
+      if(data && data.error) reject(new Error(data.error));
       else resolve(data);
     };
+    // onerrorは無視（302リダイレクトで発火することがあるが、コールバックが来れば成功）
     script.onerror = ()=>{
-      delete window[cbName];
-      document.body.removeChild(script);
-      reject(new Error('JSONP読み込み失敗'));
+      // エラーログだけ出して、コールバックが来るまで待つ
+      console.warn('JSONP script onerror（302リダイレクトの可能性あり、待機継続）');
     };
-    setTimeout(()=>{
-      if(window[cbName]){
+    const timer = setTimeout(()=>{
+      if(!settled){
+        settled = true;
         delete window[cbName];
-        reject(new Error('タイムアウト'));
+        if(script.parentNode) script.parentNode.removeChild(script);
+        reject(new Error('タイムアウト（15秒）'));
       }
     }, 15000);
-    document.body.appendChild(script);
+    window[cbName]._timer = timer;
+    (document.head || document.documentElement).appendChild(script);
   });
 }
 function setSaveDot(mode){
