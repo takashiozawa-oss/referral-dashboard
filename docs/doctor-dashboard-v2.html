@@ -674,19 +674,34 @@ let ptDocId = null;
 
 /* ---------- storage ---------- */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzgd2IZbbLd2q5H665utxqNHKQWmCOkteQBZdrgvEoDiFRQr1v9Tqid7YIytI2DhR2cXw/exec';
-const ACCESS_KEY = 'mikami2026dashboard';
+
+// 保存用パスワード（セッション中は記憶する）
+let _savedAccessKey = null;
 
 async function saveState() {
+  // パスワードを取得（セッション中は記憶）
+  if(!_savedAccessKey){
+    const key = prompt('保存パスワードを入力してください：');
+    if(!key) return; // キャンセル
+    _savedAccessKey = key;
+  }
   setSaveDot('saving');
   state.lastSaved = new Date().toISOString();
   try {
     const stateJson = encodeURIComponent(JSON.stringify(state));
     const data = await fetchFromGAS({
       action: 'save',
-      accessKey: ACCESS_KEY,
+      accessKey: _savedAccessKey,
       stateData: stateJson,
     });
-    if(data.error) throw new Error(data.error);
+    if(data.error){
+      // パスワードが間違っていたらリセット
+      if(data.error.includes('アクセスキー')){
+        _savedAccessKey = null;
+        alert('パスワードが違います。次回保存時に再入力してください。');
+      }
+      throw new Error(data.error);
+    }
     setSaveDot('saved');
     const st = document.getElementById('saveText');
     if(st) st.textContent = 'クラウドに保存済み';
