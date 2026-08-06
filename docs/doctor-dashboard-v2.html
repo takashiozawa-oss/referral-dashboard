@@ -674,12 +674,13 @@ let ptDocId = null;
 
 /* ---------- storage ---------- */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzgd2IZbbLd2q5H665utxqNHKQWmCOkteQBZdrgvEoDiFRQr1v9Tqid7YIytI2DhR2cXw/exec';
+const ACCESS_KEY = 'mikami2026dashboard';
 
 async function saveState() {
   setSaveDot('saving');
   state.lastSaved = new Date().toISOString();
   try {
-    await postToGAS({ action: 'save', state });
+    await postToGAS({ action: 'save', accessKey: ACCESS_KEY, state });
     setSaveDot('saved');
   } catch(e){
     console.error('save failed', e);
