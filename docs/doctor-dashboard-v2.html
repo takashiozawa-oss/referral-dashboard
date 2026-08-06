@@ -679,20 +679,73 @@ async function saveState() {
   setSaveDot('saving');
   state.lastSaved = new Date().toISOString();
   try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'save', state }),
-    });
-    const data = await res.json();
-    if(data.error) throw new Error(data.error);
+    await postToGAS({ action: 'save', state });
     setSaveDot('saved');
   } catch(e){
     console.error('save failed', e);
     setSaveDot('error');
   }
   updateSaveBar();
+}
+
+/* GASへのPOST（iframeフォーム方式・CORS回避） */
+function postToGAS(payload){
+  return new Promise((resolve, reject)=>{
+    const iframeId = 'gas_iframe_' + Date.now();
+    const formId  = 'gas_form_'   + Date.now();
+    const iframe = document.createElement('iframe');
+    iframe.name = iframeId;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    const form = document.createElement('form');
+    form.method  = 'POST';
+    form.action  = GAS_URL;
+    form.target  = iframeId;
+    form.style.display = 'none';
+    const input = document.createElement('input');
+    input.type  = 'hidden';
+    input.name  = 'contents';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+    document.body.appendChild(form);
+    iframe.onload = ()=>{
+      setTimeout(()=>{
+        document.body.removeChild(iframe);
+        document.body.removeChild(form);
+        resolve({ ok: true });
+      }, 500);
+    };
+    setTimeout(()=>{ resolve({ ok: true }); }, 8000); // タイムアウト
+    form.submit();
+  });
+}
+
+/* GASからのGET（JSONP方式・CORS回避） */
+function fetchFromGAS(params){
+  return new Promise((resolve, reject)=>{
+    const cbName = 'gasCb_' + Date.now();
+    const script = document.createElement('script');
+    const query = new URLSearchParams({ ...params, callback: cbName }).toString();
+    script.src = GAS_URL + '?' + query;
+    window[cbName] = (data)=>{
+      delete window[cbName];
+      document.body.removeChild(script);
+      if(data.error) reject(new Error(data.error));
+      else resolve(data);
+    };
+    script.onerror = ()=>{
+      delete window[cbName];
+      document.body.removeChild(script);
+      reject(new Error('JSONP読み込み失敗'));
+    };
+    setTimeout(()=>{
+      if(window[cbName]){
+        delete window[cbName];
+        reject(new Error('タイムアウト'));
+      }
+    }, 15000);
+    document.body.appendChild(script);
+  });
 }
 function setSaveDot(mode){
   const dot = document.getElementById('saveDot');
@@ -721,16 +774,13 @@ function updateSaveBar(){
 }
 async function loadState() {
   try {
-    const res = await fetch(GAS_URL + '?action=load');
-    const data = await res.json();
-    if(data.error) throw new Error(data.error);
+    const data = await fetchFromGAS({ action: 'load' });
     if(data.sites)   state.sites   = data.sites;
     if(data.doctors) state.doctors = data.doctors;
     if(data.records) state.records = data.records;
     if(data.visits)  state.visits  = data.visits;
   } catch(e){
     console.error('load failed', e);
-    // 読み込み失敗時はデータ空で続行（初回または接続エラー）
   }
   if (!state.sites)   state.sites   = [];
   if (!state.doctors) state.doctors = [];
