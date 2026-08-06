@@ -2041,6 +2041,7 @@ window.openDoc=openDoc; window.delDoc=delDoc; window.openPt=openPt; window.delSi
   const saveDot = document.getElementById('saveDot');
   if(saveDot) saveDot.classList.add('saving');
   await loadState();
+  setSaveDot('saved');
   render();
   updateSaveBar();
 })();
