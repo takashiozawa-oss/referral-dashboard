@@ -780,6 +780,8 @@ function updateSaveBar(){
   if(warn) warn.textContent = '';
 }
 async function loadState() {
+  // scriptタグ追加前に少し待つ（DOM完全準備を確保）
+  await new Promise(r => setTimeout(r, 100));
   try {
     const data = await fetchFromGAS({ action: 'load' });
     if(data.sites)   state.sites   = data.sites;
@@ -2025,8 +2027,15 @@ window.openDoc=openDoc; window.delDoc=delDoc; window.openPt=openPt; window.delSi
 
 /* ---------- init ---------- */
 (async function(){
-  checkAuth(); // 認証チェック（セッション継続 or オーバーレイ表示）
-  // ローディング表示
+  // DOMが完全に準備できてから実行
+  await new Promise(resolve => {
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', resolve);
+    } else {
+      resolve();
+    }
+  });
+  checkAuth();
   const saveText = document.getElementById('saveText');
   if(saveText) saveText.textContent = 'データを読み込み中…';
   const saveDot = document.getElementById('saveDot');
