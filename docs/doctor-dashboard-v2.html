@@ -688,19 +688,28 @@ async function saveState() {
   setSaveDot('saving');
   state.lastSaved = new Date().toISOString();
   try {
-    const stateJson = encodeURIComponent(JSON.stringify(state));
-    const data = await fetchFromGAS({
-      action: 'save',
-      accessKey: _savedAccessKey,
-      stateData: stateJson,
-    });
-    if(data.error){
-      // パスワードが間違っていたらリセット
-      if(data.error.includes('アクセスキー')){
-        _savedAccessKey = null;
-        alert('パスワードが違います。次回保存時に再入力してください。');
+    // データを4つのチャンクに分けて送信
+    const chunks = {
+      sites:   state.sites,
+      doctors: state.doctors,
+      records: state.records,
+      visits:  state.visits,
+    };
+    for(const [chunk, chunkData] of Object.entries(chunks)){
+      const chunkJson = encodeURIComponent(JSON.stringify(chunkData));
+      const data = await fetchFromGAS({
+        action:    'save',
+        accessKey: _savedAccessKey,
+        chunk:     chunk,
+        chunkData: chunkJson,
+      });
+      if(data.error){
+        if(data.error.includes('アクセスキー')){
+          _savedAccessKey = null;
+          alert('パスワードが違います。次回保存時に再入力してください。');
+        }
+        throw new Error(data.error);
       }
-      throw new Error(data.error);
     }
     setSaveDot('saved');
     const st = document.getElementById('saveText');
