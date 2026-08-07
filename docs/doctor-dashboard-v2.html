@@ -679,29 +679,24 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzgd2IZbbLd2q5H665utxqN
 let _savedAccessKey = null;
 
 async function saveState() {
-  // パスワードを取得（セッション中は記憶）
   if(!_savedAccessKey){
     const key = prompt('保存パスワードを入力してください：');
-    if(!key) return; // キャンセル
+    if(!key) return;
     _savedAccessKey = key;
   }
   setSaveDot('saving');
   state.lastSaved = new Date().toISOString();
   try {
-    // データを4つのチャンクに分けて送信
-    const chunks = {
-      sites:   state.sites,
-      doctors: state.doctors,
-      records: state.records,
-      visits:  state.visits,
-    };
-    for(const [chunk, chunkData] of Object.entries(chunks)){
+    // sites・doctors・visitsは一括送信
+    for(const [chunk, chunkData] of [
+      ['sites',   state.sites],
+      ['doctors', state.doctors],
+      ['visits',  state.visits],
+    ]){
       const chunkJson = encodeURIComponent(JSON.stringify(chunkData));
       const data = await fetchFromGAS({
-        action:    'save',
-        accessKey: _savedAccessKey,
-        chunk:     chunk,
-        chunkData: chunkJson,
+        action: 'save', accessKey: _savedAccessKey,
+        chunk, chunkData: chunkJson,
       });
       if(data.error){
         if(data.error.includes('アクセスキー')){
@@ -710,6 +705,21 @@ async function saveState() {
         }
         throw new Error(data.error);
       }
+    }
+    // recordsは週ごとに分割送信
+    await fetchFromGAS({
+      action: 'save', accessKey: _savedAccessKey,
+      chunk: 'records_init', chunkData: encodeURIComponent('{}'),
+    });
+    for(const [wk, docMap] of Object.entries(state.records || {})){
+      // wkキーを埋め込んだオブジェクトとして送る
+      const weekData = Object.assign({ _wk: wk }, docMap);
+      const chunkJson = encodeURIComponent(JSON.stringify(weekData));
+      const data = await fetchFromGAS({
+        action: 'save', accessKey: _savedAccessKey,
+        chunk: 'records_week', chunkData: chunkJson,
+      });
+      if(data.error) throw new Error(data.error);
     }
     setSaveDot('saved');
     const st = document.getElementById('saveText');
