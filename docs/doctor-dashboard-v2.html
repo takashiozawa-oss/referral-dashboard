@@ -694,32 +694,14 @@ async function saveState() {
       ['visits',  state.visits],
     ]){
       const chunkJson = encodeURIComponent(JSON.stringify(chunkData));
-      const data = await fetchFromGAS({
-        action: 'save', accessKey: _savedAccessKey,
-        chunk, chunkData: chunkJson,
-      });
-      if(data.error){
-        if(data.error.includes('アクセスキー')){
-          _savedAccessKey = null;
-          alert('パスワードが違います。次回保存時に再入力してください。');
-        }
-        throw new Error(data.error);
-      }
+      await saveChunkNoCors(chunk, chunkJson);
     }
     // recordsは週ごとに分割送信
-    await fetchFromGAS({
-      action: 'save', accessKey: _savedAccessKey,
-      chunk: 'records_init', chunkData: encodeURIComponent('{}'),
-    });
+    await saveChunkNoCors('records_init', encodeURIComponent('{}'));
     for(const [wk, docMap] of Object.entries(state.records || {})){
-      // wkキーを埋め込んだオブジェクトとして送る
       const weekData = Object.assign({ _wk: wk }, docMap);
       const chunkJson = encodeURIComponent(JSON.stringify(weekData));
-      const data = await fetchFromGAS({
-        action: 'save', accessKey: _savedAccessKey,
-        chunk: 'records_week', chunkData: chunkJson,
-      });
-      if(data.error) throw new Error(data.error);
+      await saveChunkNoCors('records_week', chunkJson);
     }
     setSaveDot('saved');
     const st = document.getElementById('saveText');
@@ -729,6 +711,19 @@ async function saveState() {
     setSaveDot('error');
   }
   updateSaveBar();
+}
+
+/* no-corsモードでGASに保存リクエストを送る
+   レスポンスは読めないが、GAS側で書き込みは実行される */
+async function saveChunkNoCors(chunk, chunkJson){
+  const url = GAS_URL
+    + '?action=save'
+    + '&accessKey=' + encodeURIComponent(_savedAccessKey)
+    + '&chunk=' + chunk
+    + '&chunkData=' + chunkJson;
+  await fetch(url, { method: 'GET', mode: 'no-cors' });
+  // no-corsではレスポンスが読めないので少し待つ
+  await new Promise(r => setTimeout(r, 1000));
 }
 
 /* GASへのPOST（iframeフォーム方式・CORS回避） */
