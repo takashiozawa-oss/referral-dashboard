@@ -716,20 +716,13 @@ async function saveState() {
 /* no-corsモードでGASに保存リクエストを送る
    レスポンスは読めないが、GAS側で書き込みは実行される */
 async function saveChunkNoCors(chunk, chunkJson){
-  const data = await fetchFromGAS({
-    action:    'save',
-    accessKey: _savedAccessKey,
-    chunk:     chunk,
-    chunkData: chunkJson,
-  });
-  if(data.error){
-    if(data.error.includes('アクセスキー')){
-      _savedAccessKey = null;
-      alert('パスワードが違います。次回保存時に再入力してください。');
-    }
-    throw new Error(data.error);
-  }
-  return data;
+  const url = GAS_URL
+    + '?action=save'
+    + '&accessKey=' + encodeURIComponent(_savedAccessKey)
+    + '&chunk=' + chunk
+    + '&chunkData=' + chunkJson;
+  await fetch(url, { method: 'GET', mode: 'no-cors' });
+  await new Promise(r => setTimeout(r, 200));
 }
 
 /* GASへのPOST（iframeフォーム方式・CORS回避） */
