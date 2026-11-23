@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>訪問診療 損益シミュレーション v6</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#eceff3; --surface:#ffffff; --surface-2:#f5f7fa;
+  --line:#dde3ea; --line-2:#c6cfda;
+  --ink:#16202b; --ink-2:#44546a; --ink-3:#5d6a7b;
+  --accent:#0b5fa5; --track:#dbe7f5;
+  --pos:#0f6b38; --neg:#b3261e;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  --topbar-h:68px;
+  font-family:'IBM Plex Sans JP','Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic UI','Meiryo',system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- top bar ---------- */
+.topbar{position:sticky;top:0;z-index:30;height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-inner{max-width:1800px;margin:0 auto;height:100%;padding:0 24px;display:flex;align-items:center;gap:32px}
+.brand h1{font-size:16px;font-weight:700;letter-spacing:.01em}
+.brand p{font-size:12px;color:var(--ink-3)}
+.kpis{display:flex;align-items:flex-end;gap:36px;margin-left:auto}
+.kpi{display:flex;flex-direction:column;line-height:1.3}
+.kpi span{font-size:11px;color:var(--ink-3)}
+.kpi b{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.kpi.main b{font-size:24px}
+.kpi b small{font-size:12px;font-weight:500;margin-left:2px;color:var(--ink-2)}
+.tools{display:flex;align-items:center;gap:10px}
+.unit-ctl{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.unit-ctl button{border:0;background:#fff;padding:5px 14px;cursor:pointer;font-size:12px}
+.unit-ctl button.on{background:var(--accent);color:#fff}
+
+/* ---------- layout ---------- */
+.shell{max-width:1800px;margin:0 auto;padding:20px 24px;display:grid;grid-template-columns:600px minmax(0,1fr);gap:20px;height:calc(100vh - var(--topbar-h))}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.inputs,.results{overflow:auto;min-width:0}
+@media (max-width:1180px){
+  .shell{grid-template-columns:1fr;height:auto}
+  .inputs,.results{overflow:visible}
+  .topbar{height:auto;position:static}
+  .topbar-inner{flex-wrap:wrap;padding:12px 16px;gap:12px 24px}
+  .kpis{margin-left:0;flex-wrap:wrap;gap:12px 28px}
+}
+
+/* ---------- inputs ---------- */
+details.sec{border-bottom:1px solid var(--line)}
+details.sec:last-child{border-bottom:0}
+details.sec>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;font-weight:600}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::after{content:"";width:7px;height:7px;border-right:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(45deg);margin-right:4px}
+details.sec[open]>summary::after{transform:rotate(-135deg)}
+.sec-body{padding:0 20px 20px}
+.hint{font-size:12px;color:var(--ink-3);margin:0 0 10px}
+.grp{font-size:12px;font-weight:600;color:var(--ink-2);margin:20px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--line-2)}
+.grp.first{margin-top:4px}
+.field{display:flex;align-items:center;gap:10px;padding:4px 0}
+.field>label{flex:1;font-size:13px;color:var(--ink-2)}
+.field>label small{display:block;font-size:11px;color:var(--ink-3)}
+.unit{width:28px;font-size:12px;color:var(--ink-3)}
+input.num,input.txt,select{height:32px;border:1px solid var(--line-2);border-radius:6px;padding:0 8px;background:#fff;font-size:13px}
+input.num{width:112px;text-align:right;font-variant-numeric:tabular-nums}
+input.num.sm{width:64px}
+input.txt{width:168px}
+input.txt.wide{width:auto;flex:1;min-width:0}
+input:hover,select:hover{border-color:var(--ink-3)}
+.btn{height:30px;padding:0 12px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{color:#fff;opacity:.9}
+.btn.danger:hover:not(:disabled){border-color:var(--neg);color:var(--neg)}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+
+.stabs{display:flex;gap:4px;margin-bottom:16px}
+.stab{border:1px solid var(--line-2);background:#fff;border-radius:6px;padding:5px 14px;font-size:13px;cursor:pointer}
+.stab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+.stbl{width:100%;border-collapse:collapse;font-size:12px}
+.stbl th{font-weight:500;color:var(--ink-3);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+.stbl th:first-child{text-align:left;padding-left:0}
+.stbl td{padding:4px 6px;border-bottom:1px solid var(--line)}
+.stbl td.role{padding-left:0;font-size:13px}
+.stbl td.n{text-align:right;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.stbl input.num{height:28px;width:96px}
+.stbl input.num.sm{width:52px}
+.stbl input.txt{width:100%;min-width:84px;height:28px}
+.stbl tr.dim td.role,.stbl tr.dim td.n{opacity:.5}
+
+.scn-save{display:flex;gap:8px}
+.scn-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.scn-row .nm{flex:1;min-width:0;font-weight:600;font-size:13px;overflow-wrap:anywhere}
+.scn-row .nm small{display:block;font-weight:400;font-size:11px;color:var(--ink-3)}
+.scn-empty{font-size:12px;color:var(--ink-3);padding:10px 0}
+.dir-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.dir-row .txt{width:110px}
+.cust{margin:12px 0 0}
+.cust-h{font-size:12px;color:var(--ink-3);margin-bottom:4px}
+.cust .btn{margin-top:6px}
+
+/* ---------- results ---------- */
+.tabs{position:sticky;top:0;z-index:5;background:var(--surface);display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:0;background:none;padding:14px 14px 12px;font-size:13px;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--accent);font-weight:600;border-bottom-color:var(--accent)}
+.view{padding:22px 24px 48px}
+h2.rt{font-size:15px;font-weight:600;margin:32px 0 4px}
+h2.rt:first-child{margin-top:0}
+.view .hint{margin-bottom:12px}
+
+.figs{display:flex;flex-wrap:wrap;row-gap:14px;margin-bottom:6px}
+.fig{padding-right:26px;margin-right:26px;border-right:1px solid var(--line)}
+.fig:last-child{border-right:0;margin-right:0;padding-right:0}
+.fig dt{font-size:12px;color:var(--ink-3)}
+.fig dd{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.35}
+.fig .sub{font-size:12px;color:var(--ink-3)}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.muted{color:var(--ink-3)}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:0 7px;border-radius:9px;border:1px solid currentColor;margin-left:8px;vertical-align:middle;line-height:1.6}
+
+.bep-row{display:grid;grid-template-columns:84px minmax(0,1fr) 290px;align-items:center;gap:14px;padding:9px 0}
+.nm{font-size:13px;font-weight:500;overflow-wrap:anywhere}
+.bep-track{position:relative;height:10px;background:var(--track);border-radius:0 5px 5px 0}
+.bep-fill{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;background:var(--s1)}
+.bep-fill.under{background:var(--neg)}
+.bep-mark{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--ink);transform:translateX(-1px)}
+.bep-txt{font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:0 10px;font-variant-numeric:tabular-nums}
+.bep-txt .tag{margin-left:0}
+
+.cbar-row{display:grid;grid-template-columns:84px minmax(0,1fr) 124px;align-items:center;gap:14px;margin-bottom:10px}
+.cbar{display:flex;gap:2px;height:28px}
+.blk{border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap;min-width:0}
+.blk.dark{color:#16202b}
+.cbar-row .amt{text-align:right;font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--ink-2);margin-top:4px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+
+.tscroll{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.tbl th{font-weight:500;font-size:12px;color:var(--ink-3);text-align:right;padding:6px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}
+.tbl th:first-child{text-align:left;padding-left:0}
+.tbl td{padding:6px 10px;border-bottom:1px solid var(--line)}
+.tbl td:first-child{padding-left:0}
+.tbl td.n{text-align:right;white-space:nowrap}
+.tbl td.r2{color:var(--ink-3);width:72px}
+.tbl small{display:block;font-size:11px;color:var(--ink-3)}
+.tbl tr.grp td{padding-top:18px;font-weight:600;border-bottom:1px solid var(--line-2)}
+.tbl tr.ind td:first-child{padding-left:14px;color:var(--ink-2)}
+.tbl tr.ind2 td{color:var(--ink-3);font-size:12px}
+.tbl tr.ind2 td:first-child{padding-left:28px}
+.tbl tr.sub td{font-weight:600;border-top:1px solid var(--line-2)}
+.tbl tr.total td{font-weight:700;border-top:2px solid var(--ink);border-bottom:0}
+.tbl tr.profit td{font-weight:700;font-size:15px;border-bottom:2px solid var(--ink)}
+.tbl td.strong{font-weight:600}
+
+.cmp-pick{display:flex;flex-wrap:wrap;gap:12px 24px;margin-bottom:18px}
+.cmp-pick label{font-size:12px;color:var(--ink-3);display:flex;flex-direction:column;gap:4px}
+.cmp-pick select{min-width:220px;color:var(--ink)}
+.empty{border:1px dashed var(--line-2);border-radius:8px;padding:28px;color:var(--ink-2);font-size:13px;line-height:1.8}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 14px 10px 18px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:14px;z-index:50;max-width:90vw}
+.toast button{background:none;border:0;color:#9ec5f4;font-weight:600;cursor:pointer;padding:2px 4px}
+
+@media print{
+  body{background:#fff}
+  .topbar{position:static}
+  .tools,.inputs,.tabs,.toast{display:none!important}
+  .shell{display:block;height:auto;padding:0}
+  .panel{border:0}
+  .results{overflow:visible}
+  .view{padding:12px 0}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <h1>訪問診療 損益シミュレーション</h1>
+      <p>3拠点の損益と損益分岐を、社会保険料込みで試算します</p>
+    </div>
+    <div class="kpis" id="kpis" aria-live="polite"></div>
+    <div class="tools">
+      <div class="unit-ctl" role="group" aria-label="表示単位">
+        <button type="button" class="on" data-act="unit" data-v="yen">円</button>
+        <button type="button" data-act="unit" data-v="man">万円</button>
+      </div>
+      <button type="button" class="btn" data-act="print">印刷</button>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="inputs panel" aria-label="入力">
+    <details class="sec" open>
+      <summary>シナリオ</summary>
+      <div class="sec-body">
+        <p class="hint">入力内容はこのブラウザに自動で残ります。条件を変えて比べたいときは、名前を付けて保存してください。</p>
+        <div class="scn-save">
+          <input class="txt wide" id="scnName" maxlength="40" placeholder="例：医師を1名増やす場合" aria-label="シナリオ名">
+          <button type="button" class="btn primary" data-act="scn-save">保存</button>
+        </div>
+        <div id="scnList"></div>
+        <div class="btn-row">
+          <button type="button" class="btn" data-act="scn-export">JSONで書き出し</button>
+          <label class="btn" style="cursor:pointer">JSONを読み込み<input type="file" accept=".json,application/json" data-act="scn-import" hidden></label>
+          <button type="button" class="btn" data-act="reset">初期値に戻す</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="sec" open>
+      <summary>拠点の設定</summary>
+      <div class="sec-body" id="siteInputs"></div>
+    </details>
+
+    <details class="sec" open>
+      <summary>本部費用</summary>
+      <div class="sec-body">
+        <div class="grp first">理事報酬（月額）</div>
+        <div id="dirInputs"></div>
+        <div class="btn-row" style="margin-top:8px"><button type="button" class="btn" data-act="dir-add">理事を追加</button></div>
+        <div class="grp">顧問料（法人共通・月額）</div>
+        <div id="advInputs"></div>
+        <div class="grp">採用費（法人共通）</div>
+        <div id="hqInputs"></div>
+        <p class="hint" style="margin-top:8px">採用サイトの運用費や合同説明会など、拠点に分けない採用費を入れます。</p>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary>社会保険料率</summary>
+      <div class="sec-body">
+        <p class="hint">協会けんぽ東京支部を想定した会社負担分です。厚生年金は標準報酬月額の上限で計算します。</p>
+        <div id="siInputs"></div>
+      </div>
+    </details>
+  </aside>
+
+  <main class="results panel" id="results">
+    <div class="tabs" id="tabs" role="tablist" aria-label="結果の表示切り替え"></div>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   基本ユーティリティ
+   ===================================================================== */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const sumItems = l => (l || []).reduce((a, x) => a + (Number.isFinite(Number(x.amount)) ? Number(x.amount) : 0), 0);
+const num = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v !== null ? Number(v) : d);
+
+let UNIT = 'yen';
+const sfx = () => UNIT === 'man' ? '万円' : '円';
+function yen(v) {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '—';
+  const a = Math.abs(v);
+  const s = UNIT === 'man'
+    ? (a / 10000).toLocaleString('ja-JP', {minimumFractionDigits: 1, maximumFractionDigits: 1})
+    : Math.round(a).toLocaleString('ja-JP');
+  return (v < 0 && s !== '0' && s !== '0.0' ? '▲' : '') + s;
+}
+const signed = v => v >= 0 ? '+' + yen(v) : '▲' + yen(-v);
+const pct1 = v => (v === null || !Number.isFinite(v)) ? '—' : v.toFixed(1) + '%';
+const int = v => Math.round(v).toLocaleString('ja-JP');
+const getPath = (o, p) => p.split('.').reduce((a, k) => a[k], o);
+function setPath(o, p, v) {
+  const k = p.split('.');
+  let t = o;
+  for (let i = 0; i < k.length - 1; i++) t = t[k[i]];
+  t[k[k.length - 1]] = v;
+}
+
+/* =====================================================================
+   初期値とデータモデル
+   ===================================================================== */
+const SI_DEFAULT = {healthIns:5.985, pension:9.15, pensionCap:650000, employIns:0.95, accidentIns:0.3, childCare:0.36};
+const SI_FIELDS = [
+  ['healthIns',  '健康保険（介護込み・会社負担）', '%', true],
+  ['pension',    '厚生年金（会社負担）',          '%', true],
+  ['pensionCap', '厚生年金の標準報酬月額上限',     '円', false],
+  ['employIns',  '雇用保険（事業主負担）',        '%', true],
+  ['accidentIns','労災保険',                      '%', true],
+  ['childCare',  '子ども・子育て拠出金',          '%', true],
+];
+
+const STAFF_DEFS = [
+  {id:'dr5',   label:'常勤医師（週5日）', salary:2000000, bonus:0, commute:0},
+  {id:'dr4',   label:'常勤医師（週4日）', salary:1670000, bonus:0, commute:0},
+  {id:'dr3',   label:'常勤医師（週3日）', salary:1200000, bonus:0, commute:0},
+  {id:'nurse', label:'同行者',           salary:350000,  bonus:2, commute:10000},
+  {id:'drv',   label:'ドライバー',       salary:250000,  bonus:2, commute:10000},
+  {id:'jcho',  label:'事務長',           salary:900000,  bonus:2, commute:10000},
+  {id:'sdn',   label:'相談員',           salary:400000,  bonus:2, commute:10000},
+  {id:'jimu',  label:'事務員',           salary:280000,  bonus:2, commute:10000},
+];
+
+const COST_ZERO = {officeRent:0, nightShift:0, carCount:0, carLease:0, parkingPerCar:0, systemCost:0,
+  insurance:0, comms:0, consumables:0, otherFixed:0, fuelPerDr:0, materialsPerPt:0};
+const RECRUIT_ZERO = {adMonthly:0, drCount:0, drFee:0, staffCount:0, staffFee:0};
+
+function makeSite(name, o) {
+  return {
+    name,
+    unitPrice: 75000,
+    patients: o.patients,
+    lossRate: 1.0,
+    capacity: {perFte:100, komaPerFte:40},
+    staff: STAFF_DEFS.map(d => ({id:d.id, label:d.label, count:(o.counts && o.counts[d.id]) || 0, salary:d.salary, bonusMonths:d.bonus, commute:d.commute})),
+    ptDr: {komaPrice:50000, komaPerMonth:o.koma || 0},
+    extraStaff: [],
+    custom: {fixed:[], variable:[], recruit:[]},
+    costs: Object.assign({officeRent:300000, nightShift:0, carCount:2, carLease:80000, parkingPerCar:30000,
+      systemCost:150000, insurance:100000, comms:40000, consumables:50000, otherFixed:100000,
+      fuelPerDr:40000, materials:100000, onCallPay:0, wasteDisposal:20000, labTest:50000}, o.costs || {}),
+    recruit: Object.assign({adMonthly:30000, drCount:1, drFee:3000000, staffCount:2, staffFee:300000}, o.recruit || {}),
+  };
+}
+function defaultState() {
+  return {
+    SI: Object.assign({}, SI_DEFAULT),
+    sites: [
+      makeSite('拠点A', {patients:80, counts:{dr5:1, nurse:1, drv:1, jcho:1, sdn:1, jimu:1}}),
+      makeSite('拠点B', {patients:60, counts:{dr5:1, nurse:1, drv:1, sdn:1, jimu:1},
+        costs:{officeRent:200000, carCount:1, systemCost:100000, insurance:80000, comms:30000, consumables:35000, otherFixed:80000, materials:70000, wasteDisposal:15000, labTest:40000},
+        recruit:{drCount:1, staffCount:1}}),
+      makeSite('拠点C', {patients:40, counts:{nurse:1, drv:1, jimu:1}, koma:16,
+        costs:{officeRent:150000, carCount:1, systemCost:80000, insurance:60000, comms:25000, consumables:25000, otherFixed:60000, materials:50000, wasteDisposal:10000, labTest:25000},
+        recruit:{drCount:0, staffCount:1}}),
+    ],
+    directors: [{name:'理事1', salary:0, hasSI:false}],
+    hq: {recruitMonthly: 0, custom: [], advisory: {tax:50000, labor:30000, lawyer:30000}},
+  };
+}
+
+/* 旧バージョン（v5以前）で保存した状態を新しい形に変換する。
+   旧「材料・通信・消耗品等」→消耗品費、旧「患者あたり消耗品」→材料費に移し、
+   新しい項目は0にして、費用の合計が変わらないようにする。 */
+const cleanList = a => (Array.isArray(a) ? a : []).map(x => ({name: String((x && x.name) || ''), amount: Math.max(0, num(x && x.amount, 0))}));
+function migrateState(raw) {
+  const d = defaultState();
+  const st = clone(raw || {});
+  const out = {
+    SI: Object.assign({}, SI_DEFAULT, st.SI || {}),
+    sites: [],
+    directors: [],
+    hq: {recruitMonthly: num((st.hq || {}).recruitMonthly, 0), custom: cleanList((st.hq || {}).custom),
+      advisory: {tax: num(((st.hq || {}).advisory || {}).tax, 0), labor: num(((st.hq || {}).advisory || {}).labor, 0), lawyer: num(((st.hq || {}).advisory || {}).lawyer, 0)}},
+  };
+  for (let i = 0; i < 3; i++) {
+    const site = (st.sites || [])[i];
+    if (!site) { out.sites.push(d.sites[i]); continue; }
+    const c = site.costs || {};
+    const costs = {
+      officeRent: num(c.officeRent, 0), nightShift: num(c.nightShift, 0),
+      carCount: num(c.carCount, 0), carLease: num(c.carLease, 0), parkingPerCar: num(c.parkingPerCar, 0),
+      systemCost: num(c.systemCost, 0), insurance: num(c.insurance, 0), comms: num(c.comms, 0),
+      consumables: num(c.consumables !== undefined ? c.consumables : c.supplies, 0),
+      otherFixed: num(c.otherFixed, 0), fuelPerDr: num(c.fuelPerDr, 0),
+      materials: num(c.materials !== undefined ? c.materials : (c.materialsPerPt !== undefined ? c.materialsPerPt : c.consumablePerPt) * num(site.patients, 0), 0),
+      wasteDisposal: num(c.wasteDisposal, 0), labTest: num(c.labTest, 0),
+      onCallPay: num(c.onCallPay !== undefined ? c.onCallPay : num((site.onCall || {}).unit, 0) * num((site.onCall || {}).count, 0), 0),
+    };
+    const rc = Object.assign({}, RECRUIT_ZERO, site.recruit || {});
+    Object.keys(rc).forEach(k => rc[k] = num(rc[k], 0));
+    const oldStaff = site.staff || [];
+    const staff = STAFF_DEFS.map(def => {
+      let f = oldStaff.find(x => x.id === def.id);
+      if (!f && def.id === 'dr5') f = oldStaff.find(x => x.id === 'dr');
+      return {id:def.id, label:def.label, count: f ? Math.max(0, num(f.count, 0)) : 0, salary: f ? num(f.salary, def.salary) : def.salary,
+        bonusMonths: f ? Math.max(0, num(f.bonusMonths, 0)) : 0, commute: f ? Math.max(0, num(f.commute, 0)) : 0};
+    });
+    out.sites.push({
+      name: String(site.name !== undefined ? site.name : d.sites[i].name),
+      unitPrice: num(site.unitPrice, 75000), patients: num(site.patients, 0),
+      staff, costs, recruit: rc,
+      lossRate: Math.max(0, num(site.lossRate, 0)),
+      capacity: {perFte: num((site.capacity || {}).perFte, 100), komaPerFte: num((site.capacity || {}).komaPerFte, 40)},
+      extraStaff: (Array.isArray(site.extraStaff) ? site.extraStaff : ((site.custom || {}).labor || []).map(x => ({label: x.name, count: 1, salary: x.amount})))
+        .map(x => ({label: String((x && x.label) || ''), count: Math.max(0, num(x && x.count, 0)), salary: Math.max(0, num(x && x.salary, 0)),
+          bonusMonths: Math.max(0, num(x && x.bonusMonths, 0)), commute: Math.max(0, num(x && x.commute, 0))})),
+      custom: {fixed: cleanList((site.custom || {}).fixed), variable: cleanList((site.custom || {}).variable), recruit: cleanList((site.custom || {}).recruit)},
+      ptDr: {komaPrice: num((site.ptDr || {}).komaPrice, 50000), komaPerMonth: num((site.ptDr || {}).komaPerMonth, 0)},
+    });
+  }
+  const dirs = (st.directors && st.directors.length) ? st.directors : d.directors;
+  out.directors = dirs.map(x => ({name: String(x.name !== undefined ? x.name : ''), salary: num(x.salary, 0), hasSI: !!x.hasSI}));
+  return out;
+}
+
+/* =====================================================================
+   計算
+   ===================================================================== */
+function calcSI(gross, r) {
+  const health = Math.round(gross * r.healthIns / 100);
+  const pensionBase = Math.min(gross, r.pensionCap);
+  const pen = Math.round(pensionBase * r.pension / 100);
+  const employ = Math.round(gross * r.employIns / 100);
+  const accident = Math.round(gross * r.accidentIns / 100);
+  const child = Math.round(gross * r.childCare / 100);
+  const total = health + pen + employ + accident + child;
+  return {health, pen, employ, accident, child, total, rate: gross > 0 ? total / gross * 100 : 0, pensionBase};
+}
+
+function perHead(st, rates) {
+  const base = st.salary, commute = st.commute || 0, bonusM = base * (st.bonusMonths || 0) / 12;
+  const si = calcSI(base + commute, rates).total + calcSI(bonusM, {...rates, pensionCap: Infinity}).total;
+  return {base, commute, bonusM, si, perHead: base + commute + bonusM + si};
+}
+
+function calcSite(s, rates) {
+  const c = s.costs, rc = s.recruit;
+  const billed = s.patients * s.unitPrice;
+  const loss = billed * (s.lossRate || 0) / 100;
+  const revenue = billed - loss;
+  const effPrice = s.unitPrice * (1 - (s.lossRate || 0) / 100);
+
+  const allStaff = s.staff.concat((s.extraStaff || []).map((x, k) => ({id: 'x' + k, label: x.label || '（職種未入力）', count: x.count, salary: x.salary, bonusMonths: x.bonusMonths, commute: x.commute})));
+  const staff = allStaff.map(st => {
+    const h = perHead(st, rates);
+    const gross = (h.base + h.commute + h.bonusM) * st.count, siCost = h.si * st.count;
+    return {...st, base: h.base * st.count, bonus: h.bonusM * st.count, commute: h.commute * st.count, gross, siCost, total: gross + siCost, siPer: h.si};
+  });
+  const staffGross = staff.reduce((a, x) => a + x.gross, 0);
+  const staffSI = staff.reduce((a, x) => a + x.siCost, 0);
+  const staffLabor = staffGross + staffSI;
+  const ptDrCost = s.ptDr.komaPrice * s.ptDr.komaPerMonth;
+  const labor = staffLabor + ptDrCost;
+  const drCount = staff.filter(x => /^dr\d$/.test(x.id)).reduce((a, x) => a + x.count, 0);
+
+  const fteW = {dr5: 1, dr4: 0.8, dr3: 0.6};
+  const fte = staff.reduce((a, x) => a + (fteW[x.id] || 0) * x.count, 0) + (s.capacity.komaPerFte > 0 ? s.ptDr.komaPerMonth / s.capacity.komaPerFte : 0);
+  const capacity = fte * s.capacity.perFte;
+  const utilization = capacity > 0 ? s.patients / capacity * 100 : null;
+  const carTotal = c.carCount * c.carLease;
+  const parking = c.carCount * c.parkingPerCar;
+  const customFixed = sumItems(s.custom.fixed);
+  const fixedCosts = c.officeRent + parking + carTotal + c.nightShift + c.systemCost + c.comms + c.consumables + c.insurance + c.otherFixed + c.materials + c.onCallPay + c.wasteDisposal + c.labTest + customFixed;
+
+  const fuel = c.fuelPerDr * drCount;
+  const materials = c.materials;
+  const customVarPer = sumItems(s.custom.variable);
+  const customVar = customVarPer * s.patients;
+  const variable = fuel + customVar;
+
+  const recruitAd = rc.adMonthly;
+  const recruitDr = Math.round(rc.drCount * rc.drFee / 12);
+  const recruitStaff = Math.round(rc.staffCount * rc.staffFee / 12);
+  const customRecruit = sumItems(s.custom.recruit);
+  const recruitTotal = recruitAd + recruitDr + recruitStaff + customRecruit;
+
+  const totalCost = labor + fixedCosts + variable + recruitTotal;
+  const profit = revenue - totalCost;
+  const margin = revenue > 0 ? profit / revenue * 100 : 0;
+
+  /* 損益分岐：患者数に比例して増えるのは材料費だけ。残りは固定費として扱う */
+  const bepFixed = totalCost - customVar;
+  const mpp = effPrice - customVarPer;
+  const bepPatients = mpp > 0 ? Math.ceil(bepFixed / mpp) : null;
+  const bepRevenue = mpp > 0 ? bepFixed / mpp * effPrice : null;
+  const safety = (revenue > 0 && bepRevenue !== null) ? (revenue - bepRevenue) / revenue * 100 : null;
+
+  return {
+    revenue, staff, staffGross, staffSI, staffLabor, ptDrCost, labor, drCount, billed, loss, fte, capacity, utilization,
+    customFixed, customVar, customVarPer, customRecruit,
+    carTotal, parking, fixedCosts, fuel, materials, variable,
+    recruitAd, recruitDr, recruitStaff, recruitTotal,
+    totalCost, profit, margin, bepFixed, bepPatients, bepRevenue, safety,
+    laborRatio: revenue > 0 ? labor / revenue * 100 : 0,
+  };
+}
+
+function calcHQ(dirs, hq, rates) {
+  let gross = 0, siTotal = 0;
+  const detail = dirs.map(d => {
+    const si = d.hasSI ? calcSI(d.salary, rates).total : 0;
+    gross += d.salary; siTotal += si;
+    return {name: d.name, salary: d.salary, hasSI: d.hasSI, si, total: d.salary + si};
+  });
+  const directorCost = gross + siTotal;
+  const recruit = hq.recruitMonthly || 0;
+  const customTotal = sumItems(hq.custom);
+  const adv = hq.advisory || {tax: 0, labor: 0, lawyer: 0};
+  const advisoryTotal = adv.tax + adv.labor + adv.lawyer;
+  const fixedTotal = customTotal + advisoryTotal;
+  return {detail, gross, siTotal, directorCost, recruit, customTotal, advisory: adv, advisoryTotal, fixedTotal, totalCost: directorCost + recruit + fixedTotal};
+}
+
+function calcAll(state) {
+  const rates = state.SI;
+  const sites = state.sites.map(s => calcSite(s, rates));
+  const hq = calcHQ(state.directors, state.hq, rates);
+  const sum = f => sites.reduce((a, r) => a + f(r), 0);
+
+  const revenue = sum(r => r.revenue);
+  const patients = state.sites.reduce((a, s) => a + s.patients, 0);
+  const materials = sum(r => r.customVar);
+  const totalCost = sum(r => r.totalCost) + hq.totalCost;
+  const profit = revenue - totalCost;
+  const labor = sum(r => r.labor) + hq.directorCost;
+  const bepFixed = totalCost - materials;
+  const cm = revenue - materials;
+  const bepPatients = (patients > 0 && cm > 0) ? Math.ceil(bepFixed / (cm / patients)) : null;
+  const bepRevenue = (revenue > 0 && cm > 0) ? bepFixed / (cm / revenue) : null;
+
+  const total = {
+    revenue, patients, materials, totalCost, profit, labor,
+    staffLabor: sum(r => r.staffLabor), ptDr: sum(r => r.ptDrCost),
+    fixed: sum(r => r.fixedCosts) + hq.fixedTotal, variable: sum(r => r.variable),
+    recruit: sum(r => r.recruitTotal) + hq.recruit,
+    margin: revenue > 0 ? profit / revenue * 100 : 0,
+    laborRatio: revenue > 0 ? labor / revenue * 100 : 0,
+    bepPatients, bepRevenue,
+    safety: (revenue > 0 && bepRevenue !== null) ? (revenue - bepRevenue) / revenue * 100 : null,
+  };
+  return {sites, hq, total};
+}
+
+/* =====================================================================
+   状態
+   ===================================================================== */
+const SCN_KEY = 'houmon_scenarios_v1';
+const WORK_KEY = 'houmon_working_v2';
+const mem = {};
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return mem[k] === undefined ? null : mem[k]; } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { mem[k] = v; return false; } },
+};
+
+let S = defaultState();
+let activeTab = 'total', activeSite = 0, cmpA = '__cur__', cmpB = '';
+
+(function restoreWorking() {
+  const w = store.get(WORK_KEY);
+  if (w) { try { S = migrateState(JSON.parse(w)); } catch (e) { /* 壊れた保存データは無視 */ } }
+})();
+
+/* =====================================================================
+   入力欄の描画
+   ===================================================================== */
+const fid = p => 'f_' + p.replace(/\./g, '_');
+function numField(label, path, val, unit, o = {}) {
+  const isF = !!o.float;
+  return `<div class="field"><label for="${fid(path)}">${label}${o.hint ? `<small>${o.hint}</small>` : ''}</label>
+    <input class="num${o.sm ? ' sm' : ''}" id="${fid(path)}" inputmode="decimal" data-p="${path}" data-t="${isF ? 'float' : 'int'}" value="${isF ? val : Number(val).toLocaleString('ja-JP')}">
+    <span class="unit">${unit || ''}</span></div>`;
+}
+function textField(label, path, val) {
+  return `<div class="field"><label for="${fid(path)}">${label}</label>
+    <input class="txt" id="${fid(path)}" data-p="${path}" data-t="text" value="${esc(val)}"><span class="unit"></span></div>`;
+}
+
+function staffTable(s, i) {
+  const rows = s.staff.map((st, ti) => `<tr data-r="${i}_${ti}">
+      <td class="role">${esc(st.label)}</td>
+      <td class="n"><input class="num sm" data-p="sites.${i}.staff.${ti}.count" data-t="int" value="${st.count}" aria-label="${esc(st.label)}の人数"></td>
+      <td class="n"><input class="num" data-p="sites.${i}.staff.${ti}.salary" data-t="int" value="${st.salary.toLocaleString('ja-JP')}" aria-label="${esc(st.label)}の月給"></td>
+      <td class="n" id="ss_${i}_${ti}">—</td><td class="n" id="st_${i}_${ti}">—</td><td></td></tr>`).join('');
+  const ex = (s.extraStaff || []).map((st, k) => `<tr data-r="${i}_x${k}">
+      <td class="role"><input class="txt" data-p="sites.${i}.extraStaff.${k}.label" data-t="text" value="${esc(st.label)}" placeholder="職種名" aria-label="追加した職種名"></td>
+      <td class="n"><input class="num sm" data-p="sites.${i}.extraStaff.${k}.count" data-t="int" value="${st.count}" aria-label="人数"></td>
+      <td class="n"><input class="num" data-p="sites.${i}.extraStaff.${k}.salary" data-t="int" value="${st.salary.toLocaleString('ja-JP')}" aria-label="月給"></td>
+      <td class="n" id="ss_${i}_x${k}">—</td><td class="n" id="st_${i}_x${k}">—</td>
+      <td class="n"><button type="button" class="btn danger" data-act="staff-del" data-i="${i}" data-k="${k}">削除</button></td></tr>`).join('');
+  return `<table class="stbl"><thead><tr><th>職種</th><th>人数</th><th>月給（額面）</th><th>社保/人</th><th>月額計</th><th></th></tr></thead><tbody>${rows}${ex}</tbody></table>
+    <div class="btn-row" style="margin-top:8px"><button type="button" class="btn" data-act="staff-add" data-i="${i}">職種を追加</button></div>`;
+}
+
+function bonusTable(s, i) {
+  const all = s.staff.map((st, ti) => ({st, p: `sites.${i}.staff.${ti}`, label: st.label}))
+    .concat((s.extraStaff || []).map((st, k) => ({st, p: `sites.${i}.extraStaff.${k}`, label: st.label || '（職種未入力）'})));
+  const rows = all.map(x => `<tr${x.st.count === 0 ? ' class="dim"' : ''}><td class="role">${esc(x.label)}</td>
+    <td class="n"><input class="num sm" data-p="${x.p}.bonusMonths" data-t="float" value="${x.st.bonusMonths || 0}" aria-label="${esc(x.label)}の賞与（年間の月数）"></td>
+    <td class="n"><input class="num" data-p="${x.p}.commute" data-t="int" value="${(x.st.commute || 0).toLocaleString('ja-JP')}" aria-label="${esc(x.label)}の通勤手当"></td></tr>`).join('');
+  return `<div class="cust-h" style="margin-top:14px">賞与と通勤手当（社会保険の対象）</div>
+    <table class="stbl"><thead><tr><th>職種</th><th>賞与（年間の月数）</th><th>通勤手当（月額・1人）</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="hint" style="margin-top:6px">賞与は「月給 × 月数 ÷ 12」を月額に入れます。通勤手当は非課税ですが、社会保険の計算には含まれます。</p>`;
+}
+
+function customList(path, items, title) {
+  const rows = items.map((it, k) => `<div class="dir-row">
+    <input class="txt wide" data-p="${path}.${k}.name" data-t="text" value="${esc(it.name)}" placeholder="項目名" aria-label="項目名">
+    <input class="num" data-p="${path}.${k}.amount" data-t="int" value="${Number(it.amount).toLocaleString('ja-JP')}" aria-label="金額"><span class="unit">円</span>
+    <button type="button" class="btn danger" data-act="cust-del" data-p="${path}" data-i="${k}">削除</button></div>`).join('');
+  return `<div class="cust"><div class="cust-h">${title}</div>${rows}<button type="button" class="btn" data-act="cust-add" data-p="${path}">項目を追加</button></div>`;
+}
+
+function sitePanel(s, i) {
+  const p = `sites.${i}`, c = `${p}.costs`, r = `${p}.recruit`, u = `${p}.custom`;
+  return `<div class="spanel" data-i="${i}" ${i === activeSite ? '' : 'hidden'}>
+    <div class="grp first">基本</div>
+    ${textField('拠点名', `${p}.name`, s.name)}
+    ${numField('患者月額単価（1人あたり）', `${p}.unitPrice`, s.unitPrice, '円')}
+    ${numField('患者数', `${p}.patients`, s.patients, '名')}
+    ${numField('診療報酬の減算率', `${p}.lossRate`, s.lossRate, '%', {float:true, hint:'査定・返戻・未収による目減り。請求額から引いて売上を計算します'})}
+
+    <div class="grp">人件費（月額）</div>
+    <p class="hint">社会保険を会社が負担する前提です。表にない職種は「職種を追加」で行を足せます。</p>
+    ${staffTable(s, i)}
+    ${bonusTable(s, i)}
+    ${numField('非常勤医師（月額）：1コマ単価（半日）', `${p}.ptDr.komaPrice`, s.ptDr.komaPrice, '円')}
+    ${numField('非常勤医師（月額）：月間コマ数', `${p}.ptDr.komaPerMonth`, s.ptDr.komaPerMonth, 'コマ', {hint:'月額 ＝ 1コマ単価 × コマ数（外注・社保なし）'})}
+
+    <div class="grp">医師の対応能力</div>
+    ${numField('常勤医師（週5日）1人あたりの対応可能患者数', `${p}.capacity.perFte`, s.capacity.perFte, '名', {hint:'週4日は0.8人、週3日は0.6人として計算します'})}
+    ${numField('週5日の医師1人にあたる非常勤の月間コマ数', `${p}.capacity.komaPerFte`, s.capacity.komaPerFte, 'コマ', {hint:'非常勤の対応力は コマ数 ÷ この値 で人数換算します'})}
+
+    <div class="grp">施設・車両（月額）</div>
+    ${numField('事務所賃料（月額）', `${c}.officeRent`, s.costs.officeRent, '円')}
+    ${numField('車両台数', `${c}.carCount`, s.costs.carCount, '台', {sm:true})}
+    ${numField('車両リース（月額・1台あたり）', `${c}.carLease`, s.costs.carLease, '円')}
+    ${numField('駐車場代（月額・1台あたり）', `${c}.parkingPerCar`, s.costs.parkingPerCar, '円', {hint:'月額 ＝ 車両台数 × 単価'})}
+    ${numField('燃料費（月額・常勤医師1人あたり）', `${c}.fuelPerDr`, s.costs.fuelPerDr, '円')}
+
+    <div class="grp">診療・運営（月額）</div>
+    ${numField('夜間当直の外注費（月額）', `${c}.nightShift`, s.costs.nightShift, '円', {hint:'外注先（当直サービスなど）へ支払う費用'})}
+    ${numField('当直手当（月額）', `${c}.onCallPay`, s.costs.onCallPay, '円', {hint:'外注先への支払いとは別に、当直で勤務した医師へ支払う報酬'})}
+    ${numField('電子カルテ・システム（月額）', `${c}.systemCost`, s.costs.systemCost, '円')}
+    ${numField('材料費（月額）', `${c}.materials`, s.costs.materials, '円')}
+    ${numField('医療廃棄物処理費（月額）', `${c}.wasteDisposal`, s.costs.wasteDisposal, '円')}
+    ${numField('検査委託費（月額）', `${c}.labTest`, s.costs.labTest, '円')}
+    ${numField('消耗品費（月額）', `${c}.consumables`, s.costs.consumables, '円')}
+    ${numField('通信費（月額）', `${c}.comms`, s.costs.comms, '円')}
+    ${numField('保険・諸会費（月額）', `${c}.insurance`, s.costs.insurance, '円')}
+    ${numField('その他雑費（月額）', `${c}.otherFixed`, s.costs.otherFixed, '円')}
+    ${customList(`${u}.fixed`, s.custom.fixed, 'その他の固定費（月額）')}
+    ${customList(`${u}.variable`, s.custom.variable, 'その他の変動費（月額・患者1人あたりの単価）')}
+
+    <div class="grp">採用費（月額）</div>
+    ${numField('求人広告費（月額）', `${r}.adMonthly`, s.recruit.adMonthly, '円')}
+    ${numField('医師の紹介手数料：年間の採用人数', `${r}.drCount`, s.recruit.drCount, '名', {sm:true})}
+    ${numField('医師の紹介手数料：1人あたり', `${r}.drFee`, s.recruit.drFee, '円', {hint:'月額 ＝ 人数 × 手数料 ÷ 12'})}
+    ${numField('スタッフの紹介手数料：年間の採用人数', `${r}.staffCount`, s.recruit.staffCount, '名', {sm:true})}
+    ${numField('スタッフの紹介手数料：1人あたり', `${r}.staffFee`, s.recruit.staffFee, '円', {hint:'月額 ＝ 人数 × 手数料 ÷ 12'})}
+    ${customList(`${u}.recruit`, s.custom.recruit, 'その他の採用費（月額）')}
+  </div>`;
+}
+
+function renderSiteInputs() {
+  const tabs = S.sites.map((s, i) => `<button type="button" class="stab${i === activeSite ? ' on' : ''}" data-act="site-tab" data-i="${i}">${esc(s.name)}</button>`).join('');
+  $('#siteInputs').innerHTML = `<p class="hint">金額はすべて月額です。「1台あたり」「患者1人あたり」などは月額の単価で、掛け算した結果が月額になります。</p><div class="stabs">${tabs}</div>` + S.sites.map((s, i) => sitePanel(s, i)).join('');
+}
+function renderDirectorInputs() {
+  $('#dirInputs').innerHTML = S.directors.map((d, i) => `<div class="dir-row">
+    <input class="txt" data-p="directors.${i}.name" data-t="text" value="${esc(d.name)}" aria-label="理事の名称">
+    <input class="num" data-p="directors.${i}.salary" data-t="int" value="${d.salary.toLocaleString('ja-JP')}" aria-label="理事の月額報酬"><span class="unit">円</span>
+    <select data-p="directors.${i}.hasSI" data-t="bool" aria-label="社会保険">
+      <option value="0"${d.hasSI ? '' : ' selected'}>社保なし</option><option value="1"${d.hasSI ? ' selected' : ''}>社保あり</option></select>
+    <button type="button" class="btn danger" data-act="dir-del" data-i="${i}"${S.directors.length <= 1 ? ' disabled' : ''}>削除</button></div>`).join('');
+}
+function renderHqInputs() {
+  $('#hqInputs').innerHTML = numField('採用費（月額）', 'hq.recruitMonthly', S.hq.recruitMonthly, '円') + customList('hq.custom', S.hq.custom, 'その他の法人共通費用（月額）');
+}
+function renderAdvInputs() {
+  $('#advInputs').innerHTML = numField('税理士の顧問料（月額）', 'hq.advisory.tax', S.hq.advisory.tax, '円')
+    + numField('社労士の顧問料（月額）', 'hq.advisory.labor', S.hq.advisory.labor, '円')
+    + numField('弁護士の顧問料（月額）', 'hq.advisory.lawyer', S.hq.advisory.lawyer, '円');
+}
+function renderSIInputs() {
+  $('#siInputs').innerHTML = SI_FIELDS.map(([k, l, u, f]) => numField(l, 'SI.' + k, S.SI[k], u, {float: f && u === '%'})).join('');
+}
+function renderAllInputs() {
+  renderSIInputs(); renderDirectorInputs(); renderAdvInputs(); renderHqInputs(); renderSiteInputs(); renderScenarioList();
+}
+
+function updateStaffComputed() {
+  S.sites.forEach((s, i) => {
+    const rows = s.staff.map((st, ti) => [ti, st]).concat((s.extraStaff || []).map((st, k) => ['x' + k, st]));
+    rows.forEach(([key, st]) => {
+      const a = $('#ss_' + i + '_' + key), b = $('#st_' + i + '_' + key);
+      if (!a || !b) return;
+      const h = perHead(st, S.SI);
+      a.textContent = yen(h.si);
+      b.textContent = yen(h.perHead * st.count);
+      const tr = a.closest('tr');
+      if (tr) tr.classList.toggle('dim', st.count === 0);
+    });
+  });
+}
+
+/* =====================================================================
+   結果の部品
+   ===================================================================== */
+const SEGS = {
+  staff:   {name:'常勤人件費', c:'--s1'},
+  pt:      {name:'非常勤医師', c:'--s2'},
+  fixed:   {name:'固定費',     c:'--s3'},
+  var:     {name:'変動費',     c:'--s4', dark:true},
+  recruit: {name:'採用費',     c:'--s5'},
+  dir:     {name:'理事報酬',   c:'--s6'},
+};
+const profitTag = v => v >= 0 ? '<span class="tag pos">黒字</span>' : '<span class="tag neg">赤字</span>';
+const fig = (l, v, cls = '', sub = '') => `<div class="fig"><dt>${l}</dt><dd class="${cls}">${v}</dd>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+
+function bepRows(items) {
+  const max = Math.max(1, ...items.map(x => Math.max(x.pts, x.bep || 0))) * 1.12;
+  return items.map(x => {
+    const ok = x.bep !== null && x.pts >= x.bep;
+    const w = (x.pts / max * 100).toFixed(2);
+    const m = x.bep === null ? null : (x.bep / max * 100).toFixed(2);
+    const gap = x.bep === null ? '' : (ok ? `<span class="tag pos">黒字 +${x.pts - x.bep}名</span>` : `<span class="tag neg">赤字 ▲${x.bep - x.pts}名</span>`);
+    return `<div class="bep-row"><div class="nm">${esc(x.name)}</div>
+      <div class="bep-track" role="img" aria-label="${esc(x.name)}：現在${x.pts}名、損益分岐${x.bep === null ? '算出できません' : x.bep + '名'}">
+        <div class="bep-fill${ok ? '' : ' under'}" style="width:${w}%"></div>${m === null ? '' : `<div class="bep-mark" style="left:${m}%"></div>`}</div>
+      <div class="bep-txt"><span>${x.pts}名</span><span class="muted">損益分岐 ${x.bep === null ? '—' : x.bep + '名'}</span>${gap}</div></div>`;
+  }).join('');
+}
+
+function capRows(items) {
+  const max = Math.max(1, ...items.map(x => Math.max(x.pts, x.cap))) * 1.12;
+  return items.map(x => {
+    const over = x.pts > x.cap;
+    const w = (x.pts / max * 100).toFixed(2), m = (x.cap / max * 100).toFixed(2);
+    const tag = over ? `<span class="tag neg">${x.cap <= 0 ? '医師の枠なし' : '超過 ▲' + Math.ceil(x.pts - x.cap) + '名'}</span>` : `<span class="tag pos">余裕 ${Math.floor(x.cap - x.pts)}名</span>`;
+    return `<div class="bep-row"><div class="nm">${esc(x.name)}</div>
+      <div class="bep-track" role="img" aria-label="${esc(x.name)}：患者${x.pts}名、医師の対応可能${Math.floor(x.cap)}名">
+        <div class="bep-fill${over ? ' under' : ''}" style="width:${w}%"></div><div class="bep-mark" style="left:${m}%"></div></div>
+      <div class="bep-txt"><span>${x.pts}名</span><span class="muted">対応可能 ${Math.floor(x.cap)}名</span>${tag}</div></div>`;
+  }).join('');
+}
+
+function cbarRow(name, segs) {
+  const tot = segs.reduce((a, x) => a + x.v, 0);
+  const live = segs.filter(x => x.v > 0 && tot > 0);
+  const label = live.map(x => `${SEGS[x.k].name} ${yen(x.v)}${sfx()}（${(x.v / tot * 100).toFixed(1)}%）`).join('、');
+  const blocks = live.map(x => {
+    const share = x.v / tot * 100, d = SEGS[x.k];
+    return `<div class="blk${d.dark ? ' dark' : ''}" style="flex:${x.v} 1 0;background:var(${d.c})" title="${d.name} ${yen(x.v)}${sfx()}（${share.toFixed(1)}%）">${share >= 8 ? share.toFixed(0) + '%' : ''}</div>`;
+  }).join('');
+  return `<div class="cbar-row"><div class="nm">${esc(name)}</div>
+    <div class="cbar" role="img" aria-label="${esc(name)}の費用構成：${esc(label)}">${blocks}</div>
+    <div class="amt">${yen(tot)}${sfx()}</div></div>`;
+}
+function legend(rowsOfSegs) {
+  const used = Object.keys(SEGS).filter(k => rowsOfSegs.some(segs => segs.some(x => x.k === k && x.v > 0)));
+  return `<div class="legend">${used.map(k => `<span><i style="background:var(${SEGS[k].c})"></i>${SEGS[k].name}</span>`).join('')}</div>`;
+}
+const siteSegs = r => [
+  {k:'staff', v:r.staffLabor}, {k:'pt', v:r.ptDrCost}, {k:'fixed', v:r.fixedCosts},
+  {k:'var', v:r.variable}, {k:'recruit', v:r.recruitTotal},
+];
+const unitHint = () => UNIT === 'man' ? '単位：万円（小数第1位まで）' : '単位：円';
+
+/* =====================================================================
+   結果：法人連結
+   ===================================================================== */
+function viewTotal(R) {
+  const T = R.total, hq = R.hq;
+  const figs = `<dl class="figs">
+    ${fig('連結営業利益（月）', signed(T.profit) + '<small>' + sfx() + '</small>', T.profit >= 0 ? 'pos' : 'neg', profitTag(T.profit))}
+    ${fig('売上高', yen(T.revenue) + '<small>' + sfx() + '</small>', '', `患者 ${T.patients}名`)}
+    ${fig('営業利益率', pct1(T.margin))}
+    ${fig('人件費率', pct1(T.laborRatio))}
+    ${fig('損益分岐患者数', T.bepPatients === null ? '—' : T.bepPatients + '名', '', '法人全体')}
+    ${fig('安全余裕率', pct1(T.safety))}
+  </dl>`;
+
+  const bep = bepRows(R.sites.map((r, i) => ({name: S.sites[i].name, pts: S.sites[i].patients, bep: r.bepPatients})));
+  const siteBars = R.sites.map(siteSegs);
+  const totSegs = [
+    {k:'staff', v:T.staffLabor}, {k:'pt', v:T.ptDr}, {k:'fixed', v:T.fixed}, {k:'var', v:T.variable},
+    {k:'recruit', v:T.recruit}, {k:'dir', v:hq.directorCost},
+  ];
+  const bars = R.sites.map((r, i) => cbarRow(S.sites[i].name, siteBars[i])).join('') + cbarRow('法人合計', totSegs);
+
+  const head = `<tr><th>科目</th>${S.sites.map(s => `<th>${esc(s.name)}</th>`).join('')}<th>本部</th><th>法人合計</th></tr>`;
+  const cr = (label, f, hqv = 0, o = {}) => {
+    const vals = R.sites.map(f);
+    const tot = vals.reduce((a, b) => a + b, 0) + hqv;
+    return `<tr class="${o.cls || ''}"><td>${label}</td>${vals.map(v => `<td class="n">${yen(v)}</td>`).join('')}<td class="n">${hqv ? yen(hqv) : '—'}</td><td class="n strong">${yen(tot)}</td></tr>`;
+  };
+  const grp = t => `<tr class="grp"><td colspan="${S.sites.length + 3}">${t}</td></tr>`;
+  const ratioRow = (label, f, totalVal) => `<tr><td>${label}</td>${R.sites.map(r => `<td class="n">${f(r)}</td>`).join('')}<td class="n">—</td><td class="n strong">${totalVal}</td></tr>`;
+
+  const table = `<div class="tscroll"><table class="tbl"><thead>${head}</thead><tbody>
+    ${grp('売上高')}
+    ${cr('診療報酬（請求額）', r => r.billed, 0, {cls:'ind'})}
+    ${cr('査定・返戻・未収による減算', r => -r.loss, 0, {cls:'ind'})}
+    ${cr('売上高 合計', r => r.revenue, 0, {cls:'sub'})}
+    <tr class="ind2"><td>患者数</td>${S.sites.map(s => `<td class="n">${s.patients}名</td>`).join('')}<td class="n">—</td><td class="n">${T.patients}名</td></tr>
+    ${grp('人件費')}
+    ${cr('常勤スタッフ（社保込）', r => r.staffLabor, 0, {cls:'ind'})}
+    ${cr('非常勤医師（外注）', r => r.ptDrCost, 0, {cls:'ind'})}
+    ${cr('理事報酬（社保込）', () => 0, hq.directorCost, {cls:'ind'})}
+    ${cr('人件費 合計', r => r.labor, hq.directorCost, {cls:'sub'})}
+    ${grp('固定費')}
+    ${cr('事務所賃料', (r, i) => 0, 0, {cls:'ind'}).replace(/<td class="n">0<\/td>/g, '')}
+  </tbody></table></div>`;
+  /* 上の行は下で作り直す（拠点ごとの値を持つ項目は個別に定義） */
+  const siteVal = (key) => R.sites.map((r, i) => S.sites[i].costs[key]);
+  const crv = (label, arr, hqv = 0, o = {}) => {
+    const tot = arr.reduce((a, b) => a + b, 0) + hqv;
+    return `<tr class="${o.cls || ''}"><td>${label}</td>${arr.map(v => `<td class="n">${yen(v)}</td>`).join('')}<td class="n">${hqv ? yen(hqv) : '—'}</td><td class="n strong">${yen(tot)}</td></tr>`;
+  };
+  const body = `
+    ${grp('売上高')}
+    ${cr('診療報酬（請求額）', r => r.billed, 0, {cls:'ind'})}
+    ${cr('査定・返戻・未収による減算', r => -r.loss, 0, {cls:'ind'})}
+    ${cr('売上高 合計', r => r.revenue, 0, {cls:'sub'})}
+    <tr class="ind2"><td>患者数</td>${S.sites.map(s => `<td class="n">${s.patients}名</td>`).join('')}<td class="n">—</td><td class="n">${T.patients}名</td></tr>
+    ${grp('人件費')}
+    ${cr('常勤スタッフ（社保込）', r => r.staffLabor, 0, {cls:'ind'})}
+    ${cr('非常勤医師（外注）', r => r.ptDrCost, 0, {cls:'ind'})}
+    ${cr('理事報酬（社保込）', () => 0, hq.directorCost, {cls:'ind'})}
+    ${cr('人件費 合計', r => r.labor, hq.directorCost, {cls:'sub'})}
+    ${grp('固定費')}
+    ${crv('事務所賃料', siteVal('officeRent'), 0, {cls:'ind'})}
+    ${crv('駐車場代', R.sites.map(r => r.parking), 0, {cls:'ind'})}
+    ${crv('車両リース', R.sites.map(r => r.carTotal), 0, {cls:'ind'})}
+    ${crv('夜間当直の外注費', siteVal('nightShift'), 0, {cls:'ind'})}
+    ${crv('電子カルテ・システム', siteVal('systemCost'), 0, {cls:'ind'})}
+    ${crv('材料費', siteVal('materials'), 0, {cls:'ind'})}
+    ${crv('当直手当', siteVal('onCallPay'), 0, {cls:'ind'})}
+    ${crv('医療廃棄物処理費', siteVal('wasteDisposal'), 0, {cls:'ind'})}
+    ${crv('検査委託費', siteVal('labTest'), 0, {cls:'ind'})}
+    ${crv('通信費', siteVal('comms'), 0, {cls:'ind'})}
+    ${crv('消耗品費', siteVal('consumables'), 0, {cls:'ind'})}
+    ${crv('保険・諸会費', siteVal('insurance'), 0, {cls:'ind'})}
+    ${crv('その他雑費', siteVal('otherFixed'), 0, {cls:'ind'})}
+    ${cr('その他の固定費', r => r.customFixed, 0, {cls:'ind'})}
+    ${cr('税理士の顧問料', () => 0, hq.advisory.tax, {cls:'ind'})}
+    ${cr('社労士の顧問料', () => 0, hq.advisory.labor, {cls:'ind'})}
+    ${cr('弁護士の顧問料', () => 0, hq.advisory.lawyer, {cls:'ind'})}
+    ${cr('法人共通のその他費用', () => 0, hq.customTotal, {cls:'ind'})}
+    ${cr('固定費 合計', r => r.fixedCosts, hq.fixedTotal, {cls:'sub'})}
+    ${grp('変動費')}
+    ${cr('燃料費', r => r.fuel, 0, {cls:'ind'})}
+    ${cr('その他の変動費', r => r.customVar, 0, {cls:'ind'})}
+    ${cr('変動費 合計', r => r.variable, 0, {cls:'sub'})}
+    ${grp('採用費')}
+    ${cr('求人広告費', r => r.recruitAd, 0, {cls:'ind'})}
+    ${cr('紹介手数料（医師・スタッフ）', r => r.recruitDr + r.recruitStaff, 0, {cls:'ind'})}
+    ${cr('その他の採用費', r => r.customRecruit, 0, {cls:'ind'})}
+    ${cr('法人共通の採用費', () => 0, hq.recruit, {cls:'ind'})}
+    ${cr('採用費 合計', r => r.recruitTotal, hq.recruit, {cls:'sub'})}
+    ${cr('総費用', r => r.totalCost, hq.totalCost, {cls:'total'})}
+    <tr class="profit"><td>営業利益</td>${R.sites.map(r => `<td class="n ${r.profit >= 0 ? 'pos' : 'neg'}">${signed(r.profit)}</td>`).join('')}<td class="n neg">▲${yen(hq.totalCost)}</td><td class="n ${T.profit >= 0 ? 'pos' : 'neg'}">${signed(T.profit)}</td></tr>
+    ${ratioRow('営業利益率', r => pct1(r.margin), pct1(T.margin))}
+    ${ratioRow('人件費率', r => pct1(r.laborRatio), pct1(T.laborRatio))}
+    ${ratioRow('安全余裕率', r => pct1(r.safety), pct1(T.safety))}
+    ${ratioRow('損益分岐患者数', r => r.bepPatients === null ? '—' : r.bepPatients + '名', T.bepPatients === null ? '—' : T.bepPatients + '名')}
+  `;
+  const plTable = `<div class="tscroll"><table class="tbl"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+
+  let dirTable = '';
+  if (hq.detail.some(d => d.salary > 0)) {
+    dirTable = `<h2 class="rt">理事報酬の内訳</h2><div class="tscroll"><table class="tbl"><thead><tr><th>名称</th><th>月額報酬</th><th>社会保険</th><th>法定福利費</th><th>会社の負担</th></tr></thead><tbody>
+      ${hq.detail.map(d => `<tr><td>${esc(d.name)}</td><td class="n">${yen(d.salary)}</td><td class="n">${d.hasSI ? 'あり' : 'なし'}</td><td class="n">${yen(d.si)}</td><td class="n strong">${yen(d.total)}</td></tr>`).join('')}
+      <tr class="sub"><td>合計</td><td class="n">${yen(hq.gross)}</td><td></td><td class="n">${yen(hq.siTotal)}</td><td class="n">${yen(hq.directorCost)}</td></tr></tbody></table></div>`;
+  }
+
+  return `${figs}
+    <h2 class="rt">損益分岐までの患者数</h2>
+    <p class="hint">棒が現在の患者数、縦線が損益分岐に必要な患者数です。棒が縦線に届いていれば黒字です。</p>
+    ${bep}
+    <h2 class="rt">医師の対応能力</h2>
+    <p class="hint">棒が患者数、縦線が医師の人数から見た対応可能な患者数です。棒が縦線を超えると、医師が足りません。</p>
+    ${capRows(R.sites.map((r, i) => ({name: S.sites[i].name, pts: S.sites[i].patients, cap: r.capacity})))}
+    <h2 class="rt">費用の内訳</h2>
+    <p class="hint">総費用を100%としたときの構成です。同じ色が同じ費用を表します。</p>
+    ${bars}${legend([...siteBars, totSegs])}
+    <h2 class="rt">月次損益計算書</h2>
+    <p class="hint">${unitHint()}。採用費の紹介手数料は年間の費用を12か月に均しています。</p>
+    ${plTable}${dirTable}`;
+}
+
+/* =====================================================================
+   結果：拠点
+   ===================================================================== */
+function viewSite(R, i) {
+  const s = S.sites[i], r = R.sites[i];
+  const pr = v => r.revenue > 0 ? (v / r.revenue * 100).toFixed(1) + '%' : '—';
+  const L = (label, v, o = {}) => `<tr class="${o.cls || ''}"><td>${label}${o.note ? `<small>${o.note}</small>` : ''}</td><td class="n">${yen(v)}</td><td class="n r2">${pr(v)}</td></tr>`;
+  const G = t => `<tr class="grp"><td colspan="3">${t}</td></tr>`;
+
+  const figs = `<dl class="figs">
+    ${fig('営業利益（月）', signed(r.profit) + '<small>' + sfx() + '</small>', r.profit >= 0 ? 'pos' : 'neg', profitTag(r.profit))}
+    ${fig('売上高', yen(r.revenue) + '<small>' + sfx() + '</small>', '', `${s.patients}名 × ${int(s.unitPrice)}円`)}
+    ${fig('人件費率', pct1(r.laborRatio))}
+    ${fig('医師の稼働率', r.utilization === null ? '—' : pct1(r.utilization), r.utilization > 100 ? 'neg' : '', `対応可能 ${Math.floor(r.capacity)}名`)}
+    ${fig('損益分岐患者数', r.bepPatients === null ? '—' : r.bepPatients + '名', '', `現在 ${s.patients}名`)}
+    ${fig('安全余裕率', pct1(r.safety))}
+  </dl>`;
+
+  const segs = siteSegs(r);
+  const staffRows = r.staff.filter(x => x.count > 0).map(x =>
+    L(`${esc(x.label)} ${x.count}名`, x.base, {cls:'ind'}) + (x.bonus > 0 ? L('賞与（月額換算）', x.bonus, {cls:'ind2'}) : '') + (x.commute > 0 ? L('通勤手当', x.commute, {cls:'ind2'}) : '') + L('法定福利費', x.siCost, {cls:'ind2'})).join('');
+  const c = s.costs, rc = s.recruit;
+  const items = (list, mult) => list.map(x => L(esc(x.name || '（名称未入力）'), x.amount * (mult || 1), {cls:'ind', note: mult ? `${mult}名 × ${int(x.amount)}円` : ''})).join('');
+
+  const table = `<div class="tscroll"><table class="tbl"><thead><tr><th>科目</th><th>金額</th><th>売上比</th></tr></thead><tbody>
+    ${G('売上高')}
+    ${L('診療報酬（請求額）', r.billed, {cls:'ind', note:`${s.patients}名 × ${int(s.unitPrice)}円`})}
+    ${L('査定・返戻・未収による減算', -r.loss, {cls:'ind', note:`請求額の${s.lossRate}%`})}
+    ${L('売上高 合計', r.revenue, {cls:'sub'})}
+    ${G('人件費')}
+    ${staffRows}
+    ${L('常勤スタッフ 小計（社保込）', r.staffLabor, {cls:'sub'})}
+    ${s.ptDr.komaPerMonth > 0 ? L('非常勤医師（外注）', r.ptDrCost, {cls:'ind', note:`${int(s.ptDr.komaPrice)}円 × ${s.ptDr.komaPerMonth}コマ`}) : ''}
+    ${L('人件費 合計', r.labor, {cls:'sub'})}
+    ${G('固定費')}
+    ${L('事務所賃料', c.officeRent, {cls:'ind'})}
+    ${L('駐車場代', r.parking, {cls:'ind', note:`${c.carCount}台 × ${int(c.parkingPerCar)}円`})}
+    ${L('車両リース', r.carTotal, {cls:'ind', note:`${c.carCount}台 × ${int(c.carLease)}円`})}
+    ${L('夜間当直の外注費', c.nightShift, {cls:'ind'})}
+    ${L('電子カルテ・システム', c.systemCost, {cls:'ind'})}
+    ${L('材料費', c.materials, {cls:'ind'})}
+    ${L('当直手当', c.onCallPay, {cls:'ind', note:'当直で勤務した医師への報酬'})}
+    ${L('医療廃棄物処理費', c.wasteDisposal, {cls:'ind'})}
+    ${L('検査委託費', c.labTest, {cls:'ind'})}
+    ${L('通信費', c.comms, {cls:'ind'})}
+    ${L('消耗品費', c.consumables, {cls:'ind'})}
+    ${L('保険・諸会費', c.insurance, {cls:'ind'})}
+    ${L('その他雑費', c.otherFixed, {cls:'ind'})}
+    ${items(s.custom.fixed)}
+    ${L('固定費 合計', r.fixedCosts, {cls:'sub'})}
+    ${G('変動費')}
+    ${L('燃料費', r.fuel, {cls:'ind', note:`常勤医師 ${r.drCount}名 × ${int(c.fuelPerDr)}円`})}
+    ${items(s.custom.variable, s.patients)}
+    ${L('変動費 合計', r.variable, {cls:'sub'})}
+    ${G('採用費')}
+    ${L('求人広告費', r.recruitAd, {cls:'ind'})}
+    ${L('紹介手数料（医師）', r.recruitDr, {cls:'ind', note:`年${rc.drCount}名 × ${int(rc.drFee)}円 ÷ 12`})}
+    ${L('紹介手数料（スタッフ）', r.recruitStaff, {cls:'ind', note:`年${rc.staffCount}名 × ${int(rc.staffFee)}円 ÷ 12`})}
+    ${items(s.custom.recruit)}
+    ${L('採用費 合計', r.recruitTotal, {cls:'sub'})}
+    ${L('総費用', r.totalCost, {cls:'total'})}
+    <tr class="profit"><td>営業利益</td><td class="n ${r.profit >= 0 ? 'pos' : 'neg'}">${signed(r.profit)}</td><td class="n r2">${pr(r.profit)}</td></tr>
+  </tbody></table></div>`;
+
+  return `${figs}
+    <h2 class="rt">損益分岐までの患者数</h2>
+    <p class="hint">棒が現在の患者数、縦線が損益分岐に必要な患者数です。</p>
+    ${bepRows([{name: s.name, pts: s.patients, bep: r.bepPatients}])}
+    <h2 class="rt">医師の対応能力</h2>
+    <p class="hint">医師の人数から見て対応できる患者数と、現在の患者数の比較です。</p>
+    ${capRows([{name: s.name, pts: s.patients, cap: r.capacity}])}
+    <h2 class="rt">費用の内訳</h2>
+    ${cbarRow(s.name, segs)}${legend([segs])}
+    <h2 class="rt">月次損益計算書</h2>
+    <p class="hint">${unitHint()}。売上比は売上高に対する割合です。</p>
+    ${table}`;
+}
+
+/* =====================================================================
+   結果：シナリオ比較
+   ===================================================================== */
+function resolveState(key) {
+  if (key === '__cur__') return S;
+  const e = getScenarios().find(x => x.name === key);
+  return e ? migrateState(e.state) : null;
+}
+function viewCompare() {
+  const saved = getScenarios();
+  if (cmpA !== '__cur__' && !saved.some(x => x.name === cmpA)) cmpA = '__cur__';
+  if (cmpB !== '' && cmpB !== '__cur__' && !saved.some(x => x.name === cmpB)) cmpB = '';
+  if (saved.length === 0) {
+    return `<h2 class="rt">シナリオ比較</h2>
+      <div class="empty">保存したシナリオがありません。左の「シナリオ」で名前を付けて保存すると、ここで現在の入力や別のシナリオと並べて比べられます。</div>`;
+  }
+  const opt = (sel, withBlank) => (withBlank ? `<option value=""${sel === '' ? ' selected' : ''}>選んでください</option>` : '')
+    + `<option value="__cur__"${sel === '__cur__' ? ' selected' : ''}>現在の入力</option>`
+    + saved.map(x => `<option value="${esc(x.name)}"${sel === x.name ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+  const pick = `<div class="cmp-pick">
+    <label>比較元<select data-act="cmp-a">${opt(cmpA, false)}</select></label>
+    <label>比較先<select data-act="cmp-b">${opt(cmpB, true)}</select></label></div>`;
+  if (cmpB === '') return `<h2 class="rt">シナリオ比較</h2>${pick}<div class="empty">比較先を選ぶと、差を一覧で表示します。</div>`;
+
+  const sa = resolveState(cmpA), sb = resolveState(cmpB);
+  if (!sa || !sb) return `<h2 class="rt">シナリオ比較</h2>${pick}<div class="empty">選んだシナリオを読み込めませんでした。</div>`;
+  const A = calcAll(sa), B = calcAll(sb);
+
+  const rows = [
+    ['売上高', t => t.revenue, 'm', 1],
+    ['総患者数', t => t.patients, 'n', 1],
+    ['人件費 合計', t => t.labor, 'm', -1],
+    ['固定費 合計', t => t.fixed, 'm', -1],
+    ['変動費 合計', t => t.variable, 'm', -1],
+    ['採用費 合計', t => t.recruit, 'm', -1],
+    ['総費用', t => t.totalCost, 'm', -1],
+    ['営業利益', t => t.profit, 'm', 1, 'strong'],
+    ['営業利益率', t => t.margin, 'p', 1],
+    ['人件費率', t => t.laborRatio, 'p', -1],
+    ['安全余裕率', t => t.safety, 'p', 1],
+  ];
+  const fmt = (v, k) => v === null ? '—' : k === 'm' ? yen(v) : k === 'p' ? pct1(v) : v + '名';
+  const diff = (a, b, k, good) => {
+    if (a === null || b === null) return '<td class="n">—</td>';
+    const d = b - a;
+    const cls = Math.abs(d) < 1e-9 ? 'muted' : (d * good > 0 ? 'pos' : 'neg');
+    const txt = k === 'p' ? (d >= 0 ? '+' : '▲') + Math.abs(d).toFixed(1) + 'pt' : k === 'm' ? signed(d) : (d >= 0 ? '+' : '▲') + Math.abs(d) + '名';
+    return `<td class="n ${cls} strong">${txt}</td>`;
+  };
+  const mk = ([l, f, k, good, cls]) => `<tr class="${cls === 'strong' ? 'sub' : ''}"><td>${l}</td><td class="n">${fmt(f(A.total), k)}</td><td class="n">${fmt(f(B.total), k)}</td>${diff(f(A.total), f(B.total), k, good)}</tr>`;
+  const siteRows = sa.sites.map((s, i) => {
+    const a = A.sites[i].profit, b = B.sites[i].profit;
+    const nm = s.name === sb.sites[i].name ? s.name : `${s.name}／${sb.sites[i].name}`;
+    return `<tr><td>${esc(nm)}の営業利益</td><td class="n">${yen(a)}</td><td class="n">${yen(b)}</td>${diff(a, b, 'm', 1)}</tr>`;
+  }).join('');
+  const nameOf = k => k === '__cur__' ? '現在の入力' : k;
+  return `<h2 class="rt">シナリオ比較</h2>${pick}
+    <p class="hint">${unitHint()}。差は「比較先 − 比較元」です。緑は有利、赤は不利な方向を表します。</p>
+    <div class="tscroll"><table class="tbl"><thead><tr><th>指標</th><th>${esc(nameOf(cmpA))}</th><th>${esc(nameOf(cmpB))}</th><th>差</th></tr></thead><tbody>
+    ${rows.map(mk).join('')}${siteRows}</tbody></table></div>`;
+}
+
+/* =====================================================================
+   結果：社会保険の内訳
+   ===================================================================== */
+function viewSI() {
+  const seen = new Map();
+  const add = (st, site) => {
+    if (st.count <= 0) return;
+    const key = [st.label, st.salary, st.commute || 0, st.bonusMonths || 0].join('|');
+    if (!seen.has(key)) seen.set(key, {label: st.label, salary: st.salary, commute: st.commute || 0, bonus: st.bonusMonths || 0, sites: []});
+    seen.get(key).sites.push(site);
+  };
+  S.sites.forEach(s => {
+    s.staff.forEach(st => add(st, s.name));
+    (s.extraStaff || []).forEach(x => add({...x, label: x.label || '（職種未入力）'}, s.name));
+  });
+  const rows = Array.from(seen.values());
+  S.directors.filter(d => d.hasSI && d.salary > 0).forEach(d => rows.push({label: d.name + '（理事）', salary: d.salary, commute: 0, bonus: 0, sites: []}));
+  const body = rows.map(r => {
+    const si = calcSI(r.salary + r.commute, S.SI);
+    const bonusM = r.salary * r.bonus / 12;
+    const bsi = calcSI(bonusM, {...S.SI, pensionCap: Infinity}).total;
+    const total = si.total + bsi, cash = r.salary + r.commute + bonusM;
+    const cap = si.pensionBase < r.salary + r.commute ? '＊' : '';
+    const where = r.sites.length && r.sites.length < S.sites.length ? `<small>${r.sites.map(esc).join('、')}</small>` : '';
+    return `<tr><td>${esc(r.label)}${where}</td><td class="n">${yen(cash)}</td><td class="n">${yen(si.health)}</td><td class="n">${yen(si.pen)}${cap}</td>
+      <td class="n">${yen(si.employ)}</td><td class="n">${yen(si.accident)}</td><td class="n">${yen(si.child)}</td><td class="n">${yen(bsi)}</td>
+      <td class="n strong">${yen(total)}</td><td class="n">${pct1(cash > 0 ? total / cash * 100 : 0)}</td><td class="n strong">${yen(cash + total)}</td></tr>`;
+  }).join('');
+  const anyPt = S.sites.some(s => s.ptDr.komaPerMonth > 0);
+  return `<h2 class="rt">社会保険料の内訳（1人あたり・月額）</h2>
+    <p class="hint">${unitHint()}。会社が負担する分です。月給は、月給・通勤手当・賞与の月額換算の合計です。＊は厚生年金が標準報酬月額の上限で頭打ちになっていることを示します。${anyPt ? '非常勤医師は外注費として扱うため、社会保険料はかかりません。' : ''}</p>
+    <div class="tscroll"><table class="tbl"><thead><tr><th>職種</th><th>月給＋手当＋賞与</th>
+      <th>健康保険<br>${S.SI.healthIns}%</th><th>厚生年金<br>${S.SI.pension}%</th><th>雇用保険<br>${S.SI.employIns}%</th><th>労災保険<br>${S.SI.accidentIns}%</th><th>子育て拠出金<br>${S.SI.childCare}%</th><th>賞与分の社保</th>
+      <th>福利費の計</th><th>実質料率</th><th>会社の総負担</th></tr></thead><tbody>${body || '<tr><td colspan="11" class="muted">人数が入力された職種がありません。</td></tr>'}</tbody></table></div>`;
+}
+
+/* =====================================================================
+   描画の入口
+   ===================================================================== */
+function renderKpis(R) {
+  const T = R.total;
+  $('#kpis').innerHTML = `
+    <div class="kpi main"><span>連結営業利益（月）</span><b class="${T.profit >= 0 ? 'pos' : 'neg'}">${signed(T.profit)}<small>${sfx()}</small></b></div>
+    <div class="kpi"><span>営業利益率</span><b>${pct1(T.margin)}</b></div>
+    <div class="kpi"><span>安全余裕率</span><b>${pct1(T.safety)}</b></div>`;
+}
+
+function renderResults(R) {
+  const tabs = [{k:'total', l:'法人連結'}, ...S.sites.map((s, i) => ({k:'s' + i, l:s.name})), {k:'cmp', l:'シナリオ比較'}, {k:'si', l:'社保の内訳'}];
+  $('#tabs').innerHTML = tabs.map(t => `<button type="button" class="tab${t.k === activeTab ? ' on' : ''}" role="tab" aria-selected="${t.k === activeTab}" data-act="tab" data-k="${t.k}">${esc(t.l)}</button>`).join('');
+  let html;
+  if (activeTab === 'total') html = viewTotal(R);
+  else if (activeTab === 'cmp') html = viewCompare();
+  else if (activeTab === 'si') html = viewSI();
+  else html = viewSite(R, parseInt(activeTab.slice(1), 10));
+  $('#view').innerHTML = html;
+}
+
+function render() {
+  const R = calcAll(S);
+  renderKpis(R);
+  updateStaffComputed();
+  renderResults(R);
+  persistSoon();
+}
+
+let renderTimer = null, persistTimer = null;
+function schedule() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 50); }
+function persistSoon() { clearTimeout(persistTimer); persistTimer = setTimeout(() => store.set(WORK_KEY, JSON.stringify(S)), 400); }
+
+/* =====================================================================
+   シナリオの保存・読み込み
+   ===================================================================== */
+function getScenarios() {
+  try { const a = JSON.parse(store.get(SCN_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function putScenarios(a) {
+  if (!store.set(SCN_KEY, JSON.stringify(a))) toast('このブラウザには保存できませんでした。JSONで書き出して残してください。');
+}
+
+let toastTimer = null, toastAction = null;
+function toast(msg, label, fn) {
+  const t = $('#toast');
+  toastAction = fn || null;
+  t.innerHTML = `<span>${esc(msg)}</span>${label ? `<button type="button" data-act="toast-act">${esc(label)}</button>` : ''}`;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 7000);
+}
+
+function renderScenarioList() {
+  const arr = getScenarios();
+  $('#scnList').innerHTML = arr.length === 0
+    ? '<div class="scn-empty">保存したシナリオはまだありません。</div>'
+    : arr.map(x => `<div class="scn-row"><div class="nm">${esc(x.name)}<small>${esc(x.savedAt || '')}</small></div>
+        <button type="button" class="btn" data-act="scn-load" data-n="${esc(x.name)}">読み込み</button>
+        <button type="button" class="btn danger" data-act="scn-del" data-n="${esc(x.name)}">削除</button></div>`).join('');
+}
+
+function saveScenario() {
+  const input = $('#scnName');
+  const name = input.value.trim();
+  if (!name) { toast('シナリオ名を入力してください。'); input.focus(); return; }
+  const arr = getScenarios();
+  const idx = arr.findIndex(x => x.name === name);
+  const prev = idx >= 0 ? arr[idx] : null;
+  const entry = {name, savedAt: new Date().toLocaleString('ja-JP'), v: 2, state: clone(S)};
+  if (idx >= 0) arr[idx] = entry; else arr.push(entry);
+  putScenarios(arr);
+  input.value = '';
+  renderScenarioList();
+  if (activeTab === 'cmp') render();
+  toast(prev ? `「${name}」を上書き保存しました。` : `「${name}」を保存しました。`, prev ? '元に戻す' : null, () => {
+    const a = getScenarios(); const j = a.findIndex(x => x.name === name);
+    if (j >= 0) a[j] = prev;
+    putScenarios(a); renderScenarioList(); render();
+  });
+}
+function loadScenario(name) {
+  const e = getScenarios().find(x => x.name === name);
+  if (!e) return;
+  const before = clone(S);
+  S = migrateState(e.state);
+  renderAllInputs(); render();
+  toast(`「${name}」を読み込みました。`, '元に戻す', () => { S = before; renderAllInputs(); render(); });
+}
+function deleteScenario(name) {
+  const arr = getScenarios();
+  const idx = arr.findIndex(x => x.name === name);
+  if (idx < 0) return;
+  const removed = arr.splice(idx, 1)[0];
+  putScenarios(arr); renderScenarioList(); render();
+  toast(`「${name}」を削除しました。`, '元に戻す', () => {
+    const a = getScenarios(); a.splice(Math.min(idx, a.length), 0, removed);
+    putScenarios(a); renderScenarioList(); render();
+  });
+}
+function exportJSON() {
+  const arr = getScenarios();
+  if (!arr.length) { toast('書き出せるシナリオがありません。'); return; }
+  const blob = new Blob([JSON.stringify(arr, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '訪問診療シナリオ_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function importJSON(file) {
+  if (!file) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const arr = JSON.parse(rd.result);
+      if (!Array.isArray(arr)) throw new Error('format');
+      const cur = getScenarios();
+      let added = 0, skipped = 0;
+      arr.forEach(x => {
+        if (!x || !x.name || !x.state) { skipped++; return; }
+        if (cur.some(c => c.name === x.name)) { skipped++; return; }
+        cur.push({name: String(x.name), savedAt: x.savedAt || '', v: 2, state: migrateState(x.state)});
+        added++;
+      });
+      putScenarios(cur); renderScenarioList(); if (activeTab === 'cmp') render();
+      toast(`${added}件を追加しました（同じ名前や不正なデータ ${skipped}件は読み飛ばしました）。`);
+    } catch (e) { toast('JSONファイルを読み込めませんでした。'); }
+  };
+  rd.readAsText(file);
+}
+function resetAll() {
+  const before = clone(S);
+  S = defaultState();
+  renderAllInputs(); render();
+  toast('入力を初期値に戻しました。', '元に戻す', () => { S = before; renderAllInputs(); render(); });
+}
+
+/* =====================================================================
+   イベント
+   ===================================================================== */
+function setSiteTab(i) {
+  activeSite = i;
+  $$('.spanel').forEach(p => { p.hidden = Number(p.dataset.i) !== i; });
+  $$('.stab').forEach(b => b.classList.toggle('on', Number(b.dataset.i) === i));
+}
+
+function applyInput(el) {
+  const t = el.dataset.t;
+  let v;
+  if (t === 'text') v = el.value;
+  else if (t === 'bool') v = el.value === '1';
+  else {
+    const raw = el.value.replace(/[,\s]/g, '');
+    if (raw === '' || raw === '-' || raw === '.') return;
+    const n = t === 'float' ? parseFloat(raw) : parseInt(raw, 10);
+    if (!Number.isFinite(n)) return;
+    v = Math.max(0, n);
+  }
+  setPath(S, el.dataset.p, v);
+  if (/^sites\.\d+\.name$/.test(el.dataset.p)) {
+    const i = Number(el.dataset.p.split('.')[1]);
+    const b = $('.stab[data-i="' + i + '"]');
+    if (b) b.textContent = v;
+  }
+  schedule();
+}
+
+document.addEventListener('input', e => { const el = e.target; if (el.dataset && el.dataset.p && el.tagName === 'INPUT') applyInput(el); });
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (!el.dataset) return;
+  if (el.dataset.p) { applyInput(el); return; }
+  if (el.dataset.act === 'cmp-a') { cmpA = el.value; render(); }
+  else if (el.dataset.act === 'cmp-b') { cmpB = el.value; render(); }
+  else if (el.dataset.act === 'scn-import') { importJSON(el.files[0]); el.value = ''; }
+});
+document.addEventListener('focusin', e => { const el = e.target; if (el.dataset && el.dataset.t && el.select) el.select(); });
+document.addEventListener('focusout', e => {
+  const el = e.target;
+  if (!el.dataset || el.dataset.t !== 'int' || !el.dataset.p) return;
+  const n = parseInt(el.value.replace(/,/g, ''), 10);
+  el.value = (Number.isFinite(n) ? Math.max(0, n) : getPath(S, el.dataset.p)).toLocaleString('ja-JP');
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'scnName') { e.preventDefault(); saveScenario(); }
+});
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const a = b.dataset.act;
+  if (a === 'tab') {
+    activeTab = b.dataset.k;
+    if (/^s\d$/.test(activeTab)) setSiteTab(Number(activeTab.slice(1)));
+    $('#results').scrollTop = 0;
+    render();
+  } else if (a === 'site-tab') setSiteTab(Number(b.dataset.i));
+  else if (a === 'unit') {
+    UNIT = b.dataset.v;
+    $$('.unit-ctl button').forEach(x => x.classList.toggle('on', x === b));
+    render();
+  }
+  else if (a === 'print') window.print();
+  else if (a === 'dir-add') { S.directors.push({name: '理事' + (S.directors.length + 1), salary: 0, hasSI: false}); renderDirectorInputs(); schedule(); }
+  else if (a === 'dir-del') { if (S.directors.length > 1) { S.directors.splice(Number(b.dataset.i), 1); renderDirectorInputs(); schedule(); } }
+  else if (a === 'staff-add') { S.sites[Number(b.dataset.i)].extraStaff.push({label: '', count: 1, salary: 300000, bonusMonths: 0, commute: 0}); renderSiteInputs(); schedule(); }
+  else if (a === 'staff-del') { S.sites[Number(b.dataset.i)].extraStaff.splice(Number(b.dataset.k), 1); renderSiteInputs(); schedule(); }
+  else if (a === 'cust-add' || a === 'cust-del') {
+    const list = getPath(S, b.dataset.p);
+    if (a === 'cust-add') list.push({name: '', amount: 0}); else list.splice(Number(b.dataset.i), 1);
+    if (b.dataset.p.startsWith('hq.')) renderHqInputs(); else renderSiteInputs();
+    schedule();
+  }
+  else if (a === 'scn-save') saveScenario();
+  else if (a === 'scn-load') loadScenario(b.dataset.n);
+  else if (a === 'scn-del') deleteScenario(b.dataset.n);
+  else if (a === 'scn-export') exportJSON();
+  else if (a === 'reset') resetAll();
+  else if (a === 'toast-act') { const f = toastAction; $('#toast').hidden = true; if (f) f(); }
+});
+
+/* =====================================================================
+   起動
+   ===================================================================== */
+renderAllInputs();
+render();
+</script>
+</body>
+</html>
